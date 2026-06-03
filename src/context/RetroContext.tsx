@@ -139,12 +139,27 @@ const mapActionItemFromDb = (dbAction: DbActionRow, localComments: Record<string
 type RetroFeedbackPayload = {
   facilitatorFeedback: string;
   memberFeedback: Record<string, string>;
+  joinedMemberIds: string[];
 };
 
 const getDefaultRetroFeedbackPayload = (): RetroFeedbackPayload => ({
   facilitatorFeedback: '',
-  memberFeedback: {}
+  memberFeedback: {},
+  joinedMemberIds: []
 });
+
+const normalizeJoinedMemberIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  const uniqueIds = new Set<string>();
+  value.forEach(entry => {
+    if (typeof entry === 'string' && entry.trim()) {
+      uniqueIds.add(entry.trim());
+    }
+  });
+
+  return Array.from(uniqueIds);
+};
 
 const normalizeMemberFeedback = (value: unknown): Record<string, string> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -164,7 +179,8 @@ const parseRetroFeedback = (rawFeedback: unknown): RetroFeedbackPayload => {
     const parsedObject = rawFeedback as Record<string, unknown>;
     return {
       facilitatorFeedback: typeof parsedObject.facilitatorFeedback === 'string' ? parsedObject.facilitatorFeedback : '',
-      memberFeedback: normalizeMemberFeedback(parsedObject.memberFeedback)
+      memberFeedback: normalizeMemberFeedback(parsedObject.memberFeedback),
+      joinedMemberIds: normalizeJoinedMemberIds(parsedObject.joinedMemberIds)
     };
   }
 
@@ -178,7 +194,8 @@ const parseRetroFeedback = (rawFeedback: unknown): RetroFeedbackPayload => {
     if (parsed && typeof parsed === 'object') {
       return {
         facilitatorFeedback: typeof parsed.facilitatorFeedback === 'string' ? parsed.facilitatorFeedback : '',
-        memberFeedback: normalizeMemberFeedback(parsed.memberFeedback)
+        memberFeedback: normalizeMemberFeedback(parsed.memberFeedback),
+        joinedMemberIds: normalizeJoinedMemberIds(parsed.joinedMemberIds)
       };
     }
   } catch {
@@ -187,14 +204,16 @@ const parseRetroFeedback = (rawFeedback: unknown): RetroFeedbackPayload => {
 
   return {
     facilitatorFeedback: trimmed,
-    memberFeedback: {}
+    memberFeedback: {},
+    joinedMemberIds: []
   };
 };
 
 const serializeRetroFeedback = (payload: RetroFeedbackPayload): string => {
   return JSON.stringify({
     facilitatorFeedback: payload.facilitatorFeedback,
-    memberFeedback: payload.memberFeedback
+    memberFeedback: payload.memberFeedback,
+    joinedMemberIds: payload.joinedMemberIds
   });
 };
 
@@ -335,7 +354,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               actionItems: (actions || []).map((a) => mapActionItemFromDb(a)),
               retroScore: s.retro_score,
               retroFeedback: parsedFeedback.facilitatorFeedback,
-              memberRetroFeedback: parsedFeedback.memberFeedback
+              memberRetroFeedback: parsedFeedback.memberFeedback,
+              joinedMemberIds: parsedFeedback.joinedMemberIds
             };
           })
         );
@@ -513,6 +533,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           retroScore: s.retro_score,
           retroFeedback: parsedFeedback.facilitatorFeedback,
           memberRetroFeedback: parsedFeedback.memberFeedback,
+          joinedMemberIds: parsedFeedback.joinedMemberIds,
           gameStatus: s.game_status,
           gameStartedAt: s.game_started_at,
           icebreakerQuestion: s.icebreaker_question,
@@ -633,6 +654,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 retroScore: s.retro_score,
                 retroFeedback: parsedFeedback.facilitatorFeedback,
                 memberRetroFeedback: parsedFeedback.memberFeedback,
+                joinedMemberIds: parsedFeedback.joinedMemberIds,
                 gameStatus: s.game_status,
                 gameStartedAt: s.game_started_at,
                 icebreakerQuestion: s.icebreaker_question,
@@ -658,6 +680,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     retroScore: s.retro_score,
                     retroFeedback: parsedFeedback.facilitatorFeedback,
                     memberRetroFeedback: parsedFeedback.memberFeedback,
+                    joinedMemberIds: parsedFeedback.joinedMemberIds,
                     gameStatus: s.game_status,
                     gameStartedAt: s.game_started_at,
                     icebreakerQuestion: s.icebreaker_question,
@@ -983,6 +1006,12 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const team = teams.find(t => t.id === selectedTeamId) || teams[0];
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const initialQuestion = ICEBREAKER_QUESTIONS[Math.floor(Math.random() * ICEBREAKER_QUESTIONS.length)];
+    const initialJoinedMemberIds = currentUserMemberId ? [currentUserMemberId] : [];
+    const initialFeedbackPayload = serializeRetroFeedback({
+      facilitatorFeedback: '',
+      memberFeedback: {},
+      joinedMemberIds: initialJoinedMemberIds
+    });
 
     const { error } = await supabase.from('retro_sessions').insert({
       id: retroId,
@@ -991,7 +1020,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       phase: 1,
       status: 'active',
       icebreaker_question: initialQuestion,
-      created_by: currentUserMemberId
+      created_by: currentUserMemberId,
+      retro_feedback: initialFeedbackPayload
     });
 
     if (!error) {
@@ -1011,6 +1041,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         retroScore: 5,
         retroFeedback: '',
         memberRetroFeedback: {},
+        joinedMemberIds: initialJoinedMemberIds,
         gameStatus: 'not_started',
         icebreakerQuestion: initialQuestion,
         createdBy: currentUserMemberId,
@@ -1023,6 +1054,28 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (currentRetro) {
       sessionStorage.setItem('daki_retro_joined', 'true');
       setHasJoined(true);
+
+      if (!currentUserMemberId) return;
+
+      const nextJoinedMemberIds = Array.from(new Set([...(currentRetro.joinedMemberIds || []), currentUserMemberId]));
+      const payload: RetroFeedbackPayload = {
+        facilitatorFeedback: currentRetro.retroFeedback || '',
+        memberFeedback: currentRetro.memberRetroFeedback || {},
+        joinedMemberIds: nextJoinedMemberIds
+      };
+
+      void supabase
+        .from('retro_sessions')
+        .update({ retro_feedback: serializeRetroFeedback(payload) })
+        .eq('id', currentRetro.id);
+
+      setCurrentRetro(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          joinedMemberIds: nextJoinedMemberIds
+        };
+      });
     }
   };
 
@@ -1327,7 +1380,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       memberFeedback: {
         ...parsedFeedback.memberFeedback,
         [memberId]: normalizedFeedback
-      }
+      },
+      joinedMemberIds: Array.from(new Set([...(parsedFeedback.joinedMemberIds || []), memberId]))
     };
 
     await supabase
@@ -1342,7 +1396,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         memberRetroFeedback: {
           ...prev.memberRetroFeedback,
           [memberId]: normalizedFeedback
-        }
+        },
+        joinedMemberIds: Array.from(new Set([...(prev.joinedMemberIds || []), memberId]))
       };
     });
   };
@@ -1351,7 +1406,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!currentRetro) return;
     const payload: RetroFeedbackPayload = {
       facilitatorFeedback: feedback.trim(),
-      memberFeedback: currentRetro.memberRetroFeedback || {}
+      memberFeedback: currentRetro.memberRetroFeedback || {},
+      joinedMemberIds: currentRetro.joinedMemberIds || []
     };
 
     await supabase.from('retro_sessions').update({
@@ -1377,9 +1433,19 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!retroTeam) return { ok: false, missingMemberIds: [] };
 
     const feedbackMap = currentRetro.memberRetroFeedback || {};
-    const missingMemberIds = retroTeam.members
-      .filter(member => !feedbackMap[member.id]?.trim())
-      .map(member => member.id);
+    const validTeamMemberIds = new Set(retroTeam.members.map(member => member.id));
+    const joinedIdsFromSession = (currentRetro.joinedMemberIds || []).filter(memberId => validTeamMemberIds.has(memberId));
+    const fallbackJoinedIds = [
+      ...(currentRetro.createdBy && validTeamMemberIds.has(currentRetro.createdBy) ? [currentRetro.createdBy] : []),
+      ...(currentUserMemberId && validTeamMemberIds.has(currentUserMemberId) ? [currentUserMemberId] : []),
+      ...Object.keys(feedbackMap).filter(memberId => validTeamMemberIds.has(memberId))
+    ];
+
+    const effectiveJoinedMemberIds = Array.from(
+      new Set(joinedIdsFromSession.length > 0 ? joinedIdsFromSession : fallbackJoinedIds)
+    );
+
+    const missingMemberIds = effectiveJoinedMemberIds.filter(memberId => !feedbackMap[memberId]?.trim());
 
     if (missingMemberIds.length > 0) {
       return { ok: false, missingMemberIds };

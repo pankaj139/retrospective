@@ -35,6 +35,7 @@ export interface RetroSession {
   retroScore: number;
   retroFeedback: string;
   memberRetroFeedback: Record<string, string>;
+  joinedMemberIds: string[];
   gameStatus?: string;
   gameStartedAt?: string;
   icebreakerQuestion?: string;

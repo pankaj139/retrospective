@@ -191,12 +191,16 @@ export const GamePhase: React.FC = () => {
     let frameId: number;
 
     const render = () => {
-      // Clear canvas with deep transparent dark overlay to support trail
-      ctx.fillStyle = '#090a0f';
+      // Clear canvas with a light gradient so the warmup screen reads cleanly in light mode.
+      const backgroundGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      backgroundGradient.addColorStop(0, '#ffffff');
+      backgroundGradient.addColorStop(0.55, '#eef4ff');
+      backgroundGradient.addColorStop(1, '#dbeafe');
+      ctx.fillStyle = backgroundGradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Draw background grid lines for premium aesthetics
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.08)';
       ctx.lineWidth = 1;
       for (let x = 0; x < canvas.width; x += 40) {
         ctx.beginPath();
@@ -287,8 +291,8 @@ export const GamePhase: React.FC = () => {
 
         ctx.save();
         ctx.globalAlpha = Math.max(0, s.alpha);
-        ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = 'rgba(99, 102, 241, 0.8)';
+        ctx.fillStyle = '#0f172a';
+        ctx.shadowColor = 'rgba(99, 102, 241, 0.25)';
         ctx.shadowBlur = 8;
         ctx.font = 'bold 16px Outfit, sans-serif';
         ctx.fillText(s.text, s.x, s.y);
@@ -301,16 +305,16 @@ export const GamePhase: React.FC = () => {
 
       // Overlay if not playing
       if (!isPlaying) {
-        ctx.fillStyle = 'rgba(10, 11, 16, 0.8)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = '#0f172a';
         ctx.font = 'bold 24px Outfit, sans-serif';
         
         if (!gameStartedOnce) {
           ctx.fillText('⚡ RETRO WARMUP: BALLOON SHOOTER', canvas.width / 2, canvas.height / 2 - 30);
-          ctx.fillStyle = '#9ca3af';
+          ctx.fillStyle = '#475569';
           ctx.font = '14px Outfit, sans-serif';
           ctx.fillText('Pop as many balloons as you can in 30 seconds!', canvas.width / 2, canvas.height / 2 + 10);
           ctx.fillText('Click to shoot. Golden balloons grant double points.', canvas.width / 2, canvas.height / 2 + 35);
@@ -319,7 +323,7 @@ export const GamePhase: React.FC = () => {
           ctx.fillStyle = '#fbbf24';
           ctx.font = 'bold 18px Outfit, sans-serif';
           ctx.fillText(`Your Score: ${myScore} pts`, canvas.width / 2, canvas.height / 2 + 10);
-          ctx.fillStyle = '#9ca3af';
+          ctx.fillStyle = '#475569';
           ctx.font = '14px Outfit, sans-serif';
           ctx.fillText('Review leaderboard and click next to begin the icebreaker!', canvas.width / 2, canvas.height / 2 + 40);
         }
@@ -402,8 +406,10 @@ export const GamePhase: React.FC = () => {
     <div className="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/5 pb-4">
         <div>
-          <h1 className="title-large flex items-center gap-3">
-            <Gamepad2 className="w-9 h-9 text-indigo-400" />
+          <h1 className="title-large warmup-title flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-white/85 border border-white/30 flex items-center justify-center shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
+              <Gamepad2 className="w-5 h-5 text-indigo-500" />
+            </span>
             Warmup Game
           </h1>
           <p className="subtitle">Let's shake off the daily stress and shoot some balloons together!</p>
@@ -412,19 +418,22 @@ export const GamePhase: React.FC = () => {
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
-            size="sm"
+            size="md"
             onClick={() => setSoundEnabled(prev => !prev)}
             icon={<Volume2 className={`w-4 h-4 ${soundEnabled ? 'text-indigo-400' : 'text-slate-500'}`} />}
+            style={{ paddingInline: '1.1rem', paddingBlock: '0.85rem' }}
           >
             {soundEnabled ? 'Mute' : 'Unmute'}
           </Button>
           {gameStartedOnce && !isPlaying && isFacilitator && (
             <Button
               variant="success"
+              size="md"
               icon={<ArrowRight className="w-4 h-4" />}
               iconRight
               onClick={handleNextPhase}
               glow
+              style={{ paddingInline: '1.25rem', paddingBlock: '0.9rem' }}
             >
               Start Icebreaker
             </Button>
@@ -459,10 +468,11 @@ export const GamePhase: React.FC = () => {
               isFacilitator ? (
                 <Button
                   variant="primary"
-                  size="sm"
+                  size="md"
                   icon={<Play className="w-4 h-4 fill-current" />}
                   onClick={triggerGameStart}
                   glow
+                  style={{ paddingInline: '1.25rem', paddingBlock: '0.9rem' }}
                 >
                   {gameStartedOnce ? 'Play Again' : 'Start Game'}
                 </Button>
@@ -484,7 +494,7 @@ export const GamePhase: React.FC = () => {
               width={640}
               height={400}
               onClick={handleCanvasClick}
-              className={`w-full h-full cursor-crosshair transition-all duration-300 ${isPlaying ? 'bg-slate-950' : ''}`}
+              className="game-canvas-cursor w-full h-full transition-all duration-300"
             />
           </div>
         </div>

@@ -190,7 +190,7 @@ export const SetupPhase: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 p-4">
             <div className="flex flex-col gap-1">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
                 <History className="w-5 h-5 text-indigo-400" />
                 Retrospective Details
               </h3>
@@ -958,16 +958,17 @@ export const SetupPhase: React.FC = () => {
                           onClick={() => { playClick(); setCurrentUserMemberId(member.id); }}
                           className={`flex items-center gap-3 p-3 border rounded-xl hover:bg-white/10 hover:border-white/10 transition-all duration-200 cursor-pointer
                             ${isMe 
-                              ? 'bg-indigo-600/15 border-indigo-500/40 ring-1 ring-indigo-500/25' 
+                              ? 'bg-indigo-500/12 border-indigo-500/60 shadow-[0_0_0_1px_rgba(99,102,241,0.18),0_0_18px_rgba(99,102,241,0.12)] -translate-y-[1px]' 
                               : 'bg-white/5 border-white/5'
                             }
                           `}
+                          style={isMe ? { background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(99, 102, 241, 0.08))' } : undefined}
                         >
                           <span className="text-2xl">{member.emoji}</span>
                           <div className="min-w-0">
                             <p className="text-xs font-semibold truncate flex items-center gap-1">
                               {member.name}
-                              {isMe && <span className="text-[8px] bg-indigo-500 text-white font-normal px-1 rounded">YOU</span>}
+                              {isMe && <span className="text-[8px] bg-indigo-400 text-slate-900 font-bold px-1 rounded">YOU</span>}
                             </p>
                             <p className="text-[9px] text-slate-500 truncate">{member.role}</p>
                           </div>

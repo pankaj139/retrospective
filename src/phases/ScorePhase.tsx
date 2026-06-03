@@ -26,16 +26,24 @@ export const ScorePhase: React.FC = () => {
   const [archiveError, setArchiveError] = useState('');
 
   const feedbackMap = useMemo(() => currentRetro?.memberRetroFeedback ?? {}, [currentRetro?.memberRetroFeedback]);
+  const joinedMemberIds = useMemo(
+    () => currentRetro?.joinedMemberIds?.filter(memberId => team.members.some(member => member.id === memberId)) ?? [],
+    [currentRetro?.joinedMemberIds, team.members]
+  );
+  const joinedMembers = useMemo(
+    () => team.members.filter(member => joinedMemberIds.includes(member.id)),
+    [team.members, joinedMemberIds]
+  );
   const mySavedFeedback = feedbackMap[currentUserMemberId] || '';
   const myFeedback = myFeedbackDraft ?? mySavedFeedback;
   const facilitatorFeedback = facilitatorFeedbackDraft ?? (currentRetro?.retroFeedback || '');
   const hasSubmittedMyFeedback = Boolean(mySavedFeedback.trim());
   const pendingMembers = useMemo(
-    () => (team?.members || []).filter(member => !feedbackMap[member.id]?.trim()),
-    [team?.members, feedbackMap]
+    () => joinedMembers.filter(member => !feedbackMap[member.id]?.trim()),
+    [joinedMembers, feedbackMap]
   );
   const pendingMemberNames = pendingMembers.map(member => member.name);
-  const allFeedbackSubmitted = (team?.members?.length || 0) > 0 && pendingMembers.length === 0;
+  const allFeedbackSubmitted = joinedMembers.length > 0 && pendingMembers.length === 0;
 
   const handleRatingSelect = (rate: number) => {
     playClick();
@@ -106,7 +114,7 @@ export const ScorePhase: React.FC = () => {
         </div>
         
         <div>
-          <h1 className="title-large text-3xl font-extrabold text-white mb-2">Retrospective Archived!</h1>
+          <h1 className="title-large text-3xl font-extrabold text-slate-100 mb-2">Retrospective Archived!</h1>
           <p className="subtitle text-sm max-w-sm">
             Excellent collaboration today. The session recap has been logged into team logs, and pending actions will carry forward.
           </p>
@@ -164,7 +172,7 @@ export const ScorePhase: React.FC = () => {
       {isFacilitator && !allFeedbackSubmitted && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 text-xs text-amber-300 flex flex-col gap-1.5">
           <span>
-            Waiting on {pendingMembers.length} teammate{pendingMembers.length === 1 ? '' : 's'} to submit final feedback.
+            Waiting on {pendingMembers.length} joined teammate{pendingMembers.length === 1 ? '' : 's'} to submit final feedback.
           </span>
           {pendingMemberNames.length > 0 && (
             <span className="text-[11px] text-amber-200/90">
@@ -251,7 +259,7 @@ export const ScorePhase: React.FC = () => {
             )}
 
             <div className="text-[11px] text-slate-400 border-t border-white/5 pt-3">
-              Feedback submitted: <span className="font-semibold text-emerald-400">{team.members.length - pendingMembers.length}</span> / {team.members.length}
+              Feedback submitted: <span className="font-semibold text-emerald-400">{joinedMembers.length - pendingMembers.length}</span> / {joinedMembers.length}
             </div>
           </Card>
         </div>

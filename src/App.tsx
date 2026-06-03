@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { RetroProvider, useRetro } from './context/RetroContext';
 import { Stepper } from './components/Stepper';
 import { SetupPhase } from './phases/SetupPhase';
@@ -12,15 +12,24 @@ import { PrioritizePhase } from './phases/PrioritizePhase';
 import { StarOfReleasePhase } from './phases/StarOfReleasePhase';
 import { ScorePhase } from './phases/ScorePhase';
 import { playClick } from './utils/sound';
-import { LayoutGrid, XOctagon, LogOut, SkipForward } from 'lucide-react';
+import { LayoutGrid, XOctagon, LogOut, SkipForward, Moon, Sun } from 'lucide-react';
 import './App.css';
+
+type ThemeMode = 'dark' | 'light';
+
+const THEME_STORAGE_KEY = 'daki_retro_theme';
 
 const PHASE_LABELS = [
   'Warmup Game', 'Icebreaker', 'Prev Actions', 'Health Check',
   'AI Adoption', 'DAKI Board', 'Prioritize', 'Star of Release', 'Retro Score'
 ];
 
-const AppContent: React.FC = () => {
+interface AppContentProps {
+  theme: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
+}
+
+const AppContent: React.FC<AppContentProps> = ({ theme, onThemeChange }) => {
   const { currentRetro, setPhase, nextPhase, teams, selectedTeamId, cancelRetro, leaveRetro, hasJoined, currentUserMemberId } = useRetro();
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
@@ -45,6 +54,13 @@ const AppContent: React.FC = () => {
 
   const handleSkipSection = () => {
     setShowSkipConfirm(true);
+  };
+
+  const handleThemeChange = (nextTheme: ThemeMode) => {
+    if (nextTheme !== theme) {
+      playClick();
+      onThemeChange(nextTheme);
+    }
   };
 
   const confirmSkip = () => {
@@ -83,7 +99,7 @@ const AppContent: React.FC = () => {
   return (
     <div className="app-container">
       {/* Global Header */}
-      <header className="w-full py-4 px-6 border-b border-white/10 flex items-center justify-between z-50" style={{ position: 'sticky', top: 0, background: 'rgba(8, 10, 20, 0.98)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+      <header className="app-header w-full py-4 px-6 flex items-center justify-between z-50">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-600/20">
             <LayoutGrid className="w-5 h-5 text-white" />
@@ -100,25 +116,48 @@ const AppContent: React.FC = () => {
           </div>
         </div>
 
-        {currentRetro && hasJoined && (
-          isFacilitator ? (
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <div className="theme-switcher" role="group" aria-label="Theme selector">
             <button
-              onClick={handleAbort}
-              className="flex items-center gap-1.5 text-xs text-rose-400/80 hover:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 px-3 py-1.5 rounded-lg border border-rose-500/10 transition-colors"
+              type="button"
+              onClick={() => handleThemeChange('dark')}
+              className={`theme-switcher-button ${theme === 'dark' ? 'active' : ''}`}
+              aria-pressed={theme === 'dark'}
             >
-              <XOctagon className="w-4 h-4" />
-              Abort Session
+              <Moon className="w-3.5 h-3.5" />
+              Dark
             </button>
-          ) : (
             <button
-              onClick={handleLeave}
-              className="flex items-center gap-1.5 text-xs text-amber-400/80 hover:text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/10 transition-colors"
+              type="button"
+              onClick={() => handleThemeChange('light')}
+              className={`theme-switcher-button ${theme === 'light' ? 'active' : ''}`}
+              aria-pressed={theme === 'light'}
             >
-              <LogOut className="w-4 h-4" />
-              Leave Session
+              <Sun className="w-3.5 h-3.5" />
+              Light
             </button>
-          )
-        )}
+          </div>
+
+          {currentRetro && hasJoined && (
+            isFacilitator ? (
+              <button
+                onClick={handleAbort}
+                className="flex items-center gap-1.5 text-xs text-rose-400/80 hover:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 px-3 py-1.5 rounded-lg border border-rose-500/10 transition-colors"
+              >
+                <XOctagon className="w-4 h-4" />
+                Abort Session
+              </button>
+            ) : (
+              <button
+                onClick={handleLeave}
+                className="flex items-center gap-1.5 text-xs text-amber-400/80 hover:text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/10 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Leave Session
+              </button>
+            )
+          )}
+        </div>
       </header>
 
       {/* Stepper indicators if inside active retro */}
@@ -187,7 +226,7 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Footnote */}
-      <footer className="w-full text-center py-4 text-[11px] text-slate-600 border-t border-white/5 bg-slate-950/20">
+      <footer className="app-footer w-full text-center py-4 text-[11px] text-slate-600">
         DAKI Retro Hub • Built with React, TypeScript & Web Audio API Synthesizer
       </footer>
     </div>
@@ -195,9 +234,27 @@ const AppContent: React.FC = () => {
 };
 
 function App() {
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') {
+      return 'dark';
+    }
+
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      return storedTheme;
+    }
+
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   return (
     <RetroProvider>
-      <AppContent />
+      <AppContent theme={theme} onThemeChange={setTheme} />
     </RetroProvider>
   );
 }

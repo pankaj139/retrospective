@@ -30,9 +30,9 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const sizes = {
-    sm: "px-3.5 py-1.5 text-xs gap-1.5",
-    md: "px-5 py-2.5 text-sm gap-2",
-    lg: "px-7 py-3.5 text-base gap-2.5"
+    sm: "px-4 py-2 text-xs gap-1.5",
+    md: "px-5.5 py-3 text-sm gap-2",
+    lg: "px-8 py-4 text-base gap-2.5"
   };
 
   const glowStyle = glow && variant === 'primary' ? 'shadow-[0_0_15px_rgba(99,102,241,0.4)]' : 

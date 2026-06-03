@@ -204,7 +204,7 @@ export const StarOfReleasePhase: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1">⭐ Star of the Release</p>
-                  <p className="text-lg font-extrabold text-white">{winnerMember.name}</p>
+                  <p className="text-lg font-extrabold text-slate-100">{winnerMember.name}</p>
                   <p className="text-xs text-slate-400">{winnerMember.role}</p>
                   <p className="text-xs text-amber-500/80 mt-1.5 font-semibold">
                     {topVote.count} / {totalVoters} nomination{topVote.count !== 1 ? 's' : ''}
