@@ -30,6 +30,7 @@ interface RetroContextType {
   setIcebreakerAnswer: (memberId: string, answer: string) => Promise<void>;
   setHealthScore: (memberId: string, metricId: string, score: number) => Promise<void>;
   setAiAdoptionScore: (memberId: string, questionId: string, score: number) => Promise<void>;
+  setStarOfReleaseVote: (memberId: string, nomineeId: string) => Promise<void>;
   addDakiCard: (column: 'drop' | 'add' | 'keep' | 'improve', content: string, authorId: string, category?: string) => Promise<void>;
   voteDakiCard: (cardId: string, memberId: string) => Promise<void>;
   deleteDakiCard: (cardId: string) => Promise<void>;
@@ -41,6 +42,7 @@ interface RetroContextType {
   leaveRetro: () => void;
   addSimulatedDakiCard: () => Promise<void>;
   addTeamMember: (teamId: string, name: string, role: string, emoji: string) => Promise<TeamMember | null>;
+
   hasJoined: boolean;
   joinRetro: () => void;
   isUsingMockData: boolean;
@@ -345,6 +347,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const { data: ice } = await supabase.from('icebreaker_answers').select('*').eq('session_id', s.id);
         const { data: health } = await supabase.from('health_check_scores').select('*').eq('session_id', s.id);
         const { data: aiScores } = await supabase.from('ai_adoption_scores').select('*').eq('session_id', s.id);
+        const { data: starVotes } = await supabase.from('star_of_release_votes').select('*').eq('session_id', s.id);
 
         const gameScores: Record<string, number> = {};
         games?.forEach(g => { gameScores[g.member_id] = g.score; });
@@ -370,6 +373,9 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           aiAdoptionScores[a.member_id][a.question_id] = Number(a.score);
         });
 
+        const starOfReleaseVotes: Record<string, string> = {};
+        starVotes?.forEach(v => { starOfReleaseVotes[v.voted_by_member_id] = v.nominee_member_id; });
+
         setCurrentRetro({
           id: s.id,
           teamId: s.team_id,
@@ -393,7 +399,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           gameStatus: s.game_status,
           gameStartedAt: s.game_started_at,
           icebreakerQuestion: s.icebreaker_question,
-          createdBy: s.created_by
+          createdBy: s.created_by,
+          starOfReleaseVotes
         });
       } else {
         setCurrentRetro(null);
@@ -465,6 +472,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               const { data: ice } = await supabase.from('icebreaker_answers').select('*').eq('session_id', s.id);
               const { data: health } = await supabase.from('health_check_scores').select('*').eq('session_id', s.id);
               const { data: aiScores } = await supabase.from('ai_adoption_scores').select('*').eq('session_id', s.id);
+              const { data: starVotesInsert } = await supabase.from('star_of_release_votes').select('*').eq('session_id', s.id);
 
               const gameScores: Record<string, number> = {};
               games?.forEach(g => { gameScores[g.member_id] = g.score; });
@@ -490,6 +498,9 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 aiAdoptionScores[a.member_id][a.question_id] = Number(a.score);
               });
 
+              const starOfReleaseVotesInsert: Record<string, string> = {};
+              starVotesInsert?.forEach(v => { starOfReleaseVotesInsert[v.voted_by_member_id] = v.nominee_member_id; });
+
               setCurrentRetro({
                 id: s.id,
                 teamId: s.team_id,
@@ -513,7 +524,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 gameStatus: s.game_status,
                 gameStartedAt: s.game_started_at,
                 icebreakerQuestion: s.icebreaker_question,
-                createdBy: s.created_by
+                createdBy: s.created_by,
+                starOfReleaseVotes: starOfReleaseVotesInsert
               });
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -730,6 +742,29 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       )
       .subscribe();
 
+    // Listen to star of release votes
+    const starVotesChannel = supabase
+      .channel(`star_votes_${sessionId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'star_of_release_votes', filter: `session_id=eq.${sessionId}` },
+        (payload: any) => {
+          const row = payload.new;
+          if (!row || !row.voted_by_member_id) return;
+          setCurrentRetro(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              starOfReleaseVotes: {
+                ...(prev.starOfReleaseVotes || {}),
+                [row.voted_by_member_id]: row.nominee_member_id
+              }
+            };
+          });
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(cardsChannel);
       supabase.removeChannel(gamesChannel);
@@ -737,6 +772,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       supabase.removeChannel(healthChannel);
       supabase.removeChannel(aiAdoptionChannel);
       supabase.removeChannel(actionsChannel);
+      supabase.removeChannel(starVotesChannel);
     };
   }, [currentRetro?.id]);
 
@@ -837,7 +873,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         retroFeedback: '',
         gameStatus: 'not_started',
         icebreakerQuestion: initialQuestion,
-        createdBy: currentUserMemberId
+        createdBy: currentUserMemberId,
+        starOfReleaseVotes: {}
       });
     }
   };
@@ -1069,6 +1106,16 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setPreviousActionItems(prev => prev.map(i => (i.id === itemId ? { ...i, status } : i)));
   };
 
+  // Cast / update vote for Star of Release (one vote per member per session)
+  const setStarOfReleaseVote = async (memberId: string, nomineeId: string) => {
+    if (!currentRetro) return;
+    await supabase.from('star_of_release_votes').upsert({
+      session_id: currentRetro.id,
+      voted_by_member_id: memberId,
+      nominee_member_id: nomineeId
+    }, { onConflict: 'session_id,voted_by_member_id' });
+  };
+
   // Final retro score feedback details
   const setRetroScore = async (score: number, feedback: string) => {
     if (!currentRetro) return;
@@ -1153,6 +1200,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIcebreakerAnswer,
       setHealthScore,
       setAiAdoptionScore,
+      setStarOfReleaseVote,
       addDakiCard,
       voteDakiCard,
       deleteDakiCard,

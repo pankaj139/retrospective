@@ -463,3 +463,19 @@
 .hover\:border-rose-500\/20:hover { border-color: rgba(244, 63, 94, 0.2); }
 .hover\:border-amber-500\/20:hover { border-color: rgba(245, 158, 11, 0.2); }
 .hover\:border-emerald-500\/20:hover { border-color: rgba(16, 185, 129, 0.2); }
+
+/* Position, Backdrop and Hover Utilities */
+.fixed { position: fixed; }
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.z-50 { z-index: 50; }
+.backdrop-blur-sm { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.hover\:border-indigo-500\/50:hover { border-color: rgba(99, 102, 241, 0.5); }
+.hover\:-translate-y-0\.5:hover { transform: translateY(-0.125rem); }
+.bg-white\/3 { background-color: rgba(255, 255, 255, 0.03); }
+.bg-white\/8 { background-color: rgba(255, 255, 255, 0.08); }
+.hover\:bg-white\/8:hover { background-color: rgba(255, 255, 255, 0.08); }
+.bg-amber-950\/10 { background-color: rgba(120, 53, 4, 0.1); }
+.border-amber-500\/40 { border-color: rgba(245, 158, 11, 0.4); }
+.shadow-amber { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15); }
+.opacity-40 { opacity: 0.4; }
+

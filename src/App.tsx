@@ -9,6 +9,7 @@ import { HealthCheckPhase } from './phases/HealthCheckPhase';
 import { AiAdoptionPhase } from './phases/AiAdoptionPhase';
 import { DakiPhase } from './phases/DakiPhase';
 import { PrioritizePhase } from './phases/PrioritizePhase';
+import { StarOfReleasePhase } from './phases/StarOfReleasePhase';
 import { ScorePhase } from './phases/ScorePhase';
 import { playClick } from './utils/sound';
 import { LayoutGrid, XOctagon, LogOut } from 'lucide-react';
@@ -63,6 +64,8 @@ const AppContent: React.FC = () => {
       case 7:
         return <PrioritizePhase />;
       case 8:
+        return <StarOfReleasePhase />;
+      case 9:
         return <ScorePhase />;
       default:
         return <GamePhase />;

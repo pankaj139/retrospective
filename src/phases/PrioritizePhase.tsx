@@ -94,7 +94,7 @@ export const PrioritizePhase: React.FC = () => {
                 iconRight
                 glow
               >
-                Retro Score
+                Star of Release
               </Button>
             </>
           ) : (

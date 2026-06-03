@@ -37,7 +37,9 @@ export interface RetroSession {
   gameStartedAt?: string;
   icebreakerQuestion?: string;
   createdBy?: string;
+  starOfReleaseVotes?: Record<string, string>;
 }
+
 
 export interface DakiCard {
   id: string;

@@ -4,9 +4,16 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { 
   Users, Plus, Play, History, Calendar, CheckCircle, 
-  ArrowLeft, ArrowRight, UserPlus, ShieldCheck, HelpCircle 
+  ArrowLeft, ArrowRight, UserPlus, ShieldCheck, HelpCircle,
+  X, Star, Heart, CheckSquare, Bot, Activity
 } from 'lucide-react';
 import { playClick } from '../utils/sound';
+import { 
+  type RetroSession, 
+  HEALTH_METRICS, 
+  AI_ADOPTION_QUESTIONS 
+} from '../utils/mockData';
+
 
 export const SetupPhase: React.FC = () => {
   const { 
@@ -25,6 +32,9 @@ export const SetupPhase: React.FC = () => {
   } = useRetro();
 
   const [activeTab, setActiveTab] = useState<'team' | 'user'>('team');
+  const [selectedHistoryRetro, setSelectedHistoryRetro] = useState<RetroSession | null>(null);
+  const [modalTab, setModalTab] = useState<'overview' | 'daki' | 'actions'>('overview');
+
   
   // Team creation states
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
@@ -110,8 +120,473 @@ export const SetupPhase: React.FC = () => {
     }
   };
 
+  const renderHistoryDetailModal = () => {
+    if (!selectedHistoryRetro) return null;
+    
+    const retroTeam = teams.find(t => t.id === selectedHistoryRetro.teamId);
+    const teamName = retroTeam?.name || 'Team';
+    
+    const dakiCount = selectedHistoryRetro.dakiCards?.length || 0;
+    const actionCount = selectedHistoryRetro.actionItems?.length || 0;
+    
+    const getHealthAverage = (metricId: string) => {
+      const scores: number[] = [];
+      Object.values(selectedHistoryRetro.healthCheckScores || {}).forEach(mScores => {
+        if (mScores[metricId] !== undefined) {
+          scores.push(mScores[metricId]);
+        }
+      });
+      return scores.length > 0
+        ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+        : 0;
+    };
+
+    const getAiAverage = (questionId: string) => {
+      const scores: number[] = [];
+      Object.values(selectedHistoryRetro.aiAdoptionScores || {}).forEach(mScores => {
+        if (mScores[questionId] !== undefined) {
+          scores.push(mScores[questionId]);
+        }
+      });
+      return scores.length > 0
+        ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+        : 0;
+    };
+    
+    const getProgressBarColor = (score: number) => {
+      if (score === 0) return 'bg-slate-700';
+      if (score < 2.5) return 'bg-rose-500';
+      if (score < 3.5) return 'bg-amber-500';
+      return 'bg-emerald-500';
+    };
+
+    const getCategoryBadgeClass = (cat: string) => {
+      switch (cat.toLowerCase()) {
+        case 'code': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+        case 'testing': return 'bg-violet-500/10 text-violet-400 border-violet-500/20';
+        case 'process': return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
+        case 'documentation': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+        default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+      }
+    };
+
+    return (
+      <div 
+        className="fixed inset-0 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm z-50 p-4"
+        onClick={() => setSelectedHistoryRetro(null)}
+      >
+        <div 
+          className="glass-panel rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-6"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-indigo-400" />
+                Retrospective Details
+              </h3>
+              <p className="text-xs text-slate-400">
+                {teamName} • Conducted on {selectedHistoryRetro.date}
+              </p>
+            </div>
+            <button 
+              onClick={() => setSelectedHistoryRetro(null)}
+              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-200"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="flex border-b border-white/5 pb-2 gap-2 overflow-x-auto">
+            <button
+              onClick={() => { playClick(); setModalTab('overview'); }}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                modalTab === 'overview' 
+                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Activity className="w-4 h-4" />
+                Overview & Metrics
+              </span>
+            </button>
+            <button
+              onClick={() => { playClick(); setModalTab('daki'); }}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                modalTab === 'daki' 
+                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <History className="w-4 h-4 text-emerald-400" />
+                DAKI Board ({dakiCount})
+              </span>
+            </button>
+            <button
+              onClick={() => { playClick(); setModalTab('actions'); }}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                modalTab === 'actions' 
+                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-cyan-400" />
+                Action Items ({actionCount})
+              </span>
+            </button>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 min-h-0">
+            {modalTab === 'overview' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Left Column: Summary */}
+                <div className="flex flex-col gap-6">
+                  <div className="p-5 bg-slate-900/60 border border-white/5 rounded-2xl flex flex-col gap-4">
+                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+                      Retro Score & Summary
+                    </h4>
+                    
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-3 py-1.5 rounded-xl text-amber-400 font-bold text-lg">
+                        <Star className="w-5 h-5 fill-current" />
+                        {selectedHistoryRetro.retroScore}/5
+                      </div>
+                      
+                      <div className="text-xs text-slate-400 flex flex-col">
+                        <span>Total DAKI Cards: <strong className="text-slate-200">{dakiCount}</strong></span>
+                        <span>Total Action Items: <strong className="text-slate-200">{actionCount}</strong></span>
+                      </div>
+                    </div>
+
+                    {selectedHistoryRetro.retroFeedback ? (
+                      <div className="relative mt-2 p-4 bg-slate-950/40 border border-white/5 rounded-xl italic text-slate-300 text-sm">
+                        <span className="absolute -top-3 left-4 bg-slate-900 px-2 text-[10px] uppercase font-bold text-slate-500 not-italic">
+                          Facilitator Feedback
+                        </span>
+                        "{selectedHistoryRetro.retroFeedback}"
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500 italic mt-2">
+                        No closing feedback was provided for this session.
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Additional info or game scores summary */}
+                  {Object.keys(selectedHistoryRetro.gameScores || {}).length > 0 && (
+                    <div className="p-5 bg-slate-900/60 border border-white/5 rounded-2xl flex flex-col gap-3">
+                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+                        Warmup Game Top Scores
+                      </h4>
+                      <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
+                        {Object.entries(selectedHistoryRetro.gameScores)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([mId, score]) => {
+                            const member = retroTeam?.members.find(m => m.id === mId);
+                            return (
+                              <div key={mId} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5 last:border-0">
+                                <span className="flex items-center gap-1.5 text-slate-300">
+                                  <span>{member?.emoji || '👤'}</span>
+                                  <span>{member?.name || 'Anonymous Member'}</span>
+                                </span>
+                                <span className="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                  {score} pts
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: Health and AI Metrics */}
+                <div className="flex flex-col gap-6">
+                  {/* Health Check Scores */}
+                  <div className="p-5 bg-slate-900/60 border border-white/5 rounded-2xl flex flex-col gap-4">
+                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-rose-400" />
+                      Team Health Averages
+                    </h4>
+                    
+                    <div className="flex flex-col gap-3.5">
+                      {HEALTH_METRICS.map(metric => {
+                        const avg = getHealthAverage(metric.id);
+                        return (
+                          <div key={metric.id} className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-300 font-semibold">{metric.name}</span>
+                              <span className="font-mono font-bold text-slate-200">{avg > 0 ? `${avg}/5` : 'N/A'}</span>
+                            </div>
+                            <div className="w-full bg-slate-950/80 rounded-full h-2 overflow-hidden border border-white/5">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor(avg)}`}
+                                style={{ width: `${(avg / 5) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* AI Adoption Scores */}
+                  <div className="p-5 bg-slate-900/60 border border-white/5 rounded-2xl flex flex-col gap-4">
+                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                      <Bot className="w-4 h-4 text-cyan-400" />
+                      AI Adoption Averages
+                    </h4>
+                    
+                    <div className="flex flex-col gap-3.5">
+                      {AI_ADOPTION_QUESTIONS.map(question => {
+                        const avg = getAiAverage(question.id);
+                        return (
+                          <div key={question.id} className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-300 font-semibold">{question.name}</span>
+                              <span className="font-mono font-bold text-slate-200">{avg > 0 ? `${avg}/5` : 'N/A'}</span>
+                            </div>
+                            <div className="w-full bg-slate-950/80 rounded-full h-2 overflow-hidden border border-white/5">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor(avg)}`}
+                                style={{ width: `${(avg / 5) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {modalTab === 'daki' && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Drop Column */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between border-b border-rose-500/20 pb-1.5 px-1">
+                    <h5 className="text-xs font-bold text-rose-400 uppercase tracking-wide">
+                      🛑 DROP
+                    </h5>
+                    <span className="text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full font-bold">
+                      {selectedHistoryRetro.dakiCards?.filter(c => c.column === 'drop').length || 0}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1">
+                    {(selectedHistoryRetro.dakiCards || []).filter(c => c.column === 'drop').length === 0 ? (
+                      <div className="text-[11px] text-slate-600 text-center py-4">No cards</div>
+                    ) : (
+                      (selectedHistoryRetro.dakiCards || [])
+                        .filter(c => c.column === 'drop')
+                        .map(card => (
+                          <div key={card.id} className="daki-card-item bg-rose-950/10 border-rose-500/10">
+                            <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
+                            <div className="flex items-center justify-between mt-1 text-[10px]">
+                              <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
+                                {card.category || 'General'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 flex items-center gap-0.5">
+                                  <Star className="w-3 h-3 text-amber-400 fill-current" /> {card.votes}
+                                </span>
+                                <span className="text-slate-500 truncate max-w-[80px]" title={card.authorName}>
+                                  {card.authorEmoji} {card.authorName}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Add Column */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between border-b border-emerald-500/20 pb-1.5 px-1">
+                    <h5 className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
+                      ➕ ADD
+                    </h5>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+                      {selectedHistoryRetro.dakiCards?.filter(c => c.column === 'add').length || 0}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1">
+                    {(selectedHistoryRetro.dakiCards || []).filter(c => c.column === 'add').length === 0 ? (
+                      <div className="text-[11px] text-slate-600 text-center py-4">No cards</div>
+                    ) : (
+                      (selectedHistoryRetro.dakiCards || [])
+                        .filter(c => c.column === 'add')
+                        .map(card => (
+                          <div key={card.id} className="daki-card-item bg-emerald-950/10 border-emerald-500/10">
+                            <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
+                            <div className="flex items-center justify-between mt-1 text-[10px]">
+                              <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
+                                {card.category || 'General'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 flex items-center gap-0.5">
+                                  <Star className="w-3 h-3 text-amber-400 fill-current" /> {card.votes}
+                                </span>
+                                <span className="text-slate-500 truncate max-w-[80px]" title={card.authorName}>
+                                  {card.authorEmoji} {card.authorName}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Keep Column */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between border-b border-amber-500/20 pb-1.5 px-1">
+                    <h5 className="text-xs font-bold text-amber-400 uppercase tracking-wide">
+                      ⭐ KEEP
+                    </h5>
+                    <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold">
+                      {selectedHistoryRetro.dakiCards?.filter(c => c.column === 'keep').length || 0}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1">
+                    {(selectedHistoryRetro.dakiCards || []).filter(c => c.column === 'keep').length === 0 ? (
+                      <div className="text-[11px] text-slate-600 text-center py-4">No cards</div>
+                    ) : (
+                      (selectedHistoryRetro.dakiCards || [])
+                        .filter(c => c.column === 'keep')
+                        .map(card => (
+                          <div key={card.id} className="daki-card-item bg-amber-950/10 border-amber-500/10">
+                            <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
+                            <div className="flex items-center justify-between mt-1 text-[10px]">
+                              <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
+                                {card.category || 'General'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 flex items-center gap-0.5">
+                                  <Star className="w-3 h-3 text-amber-400 fill-current" /> {card.votes}
+                                </span>
+                                <span className="text-slate-500 truncate max-w-[80px]" title={card.authorName}>
+                                  {card.authorEmoji} {card.authorName}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Improve Column */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between border-b border-cyan-500/20 pb-1.5 px-1">
+                    <h5 className="text-xs font-bold text-cyan-400 uppercase tracking-wide">
+                      ⚙️ IMPROVE
+                    </h5>
+                    <span className="text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-full font-bold">
+                      {selectedHistoryRetro.dakiCards?.filter(c => c.column === 'improve').length || 0}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1">
+                    {(selectedHistoryRetro.dakiCards || []).filter(c => c.column === 'improve').length === 0 ? (
+                      <div className="text-[11px] text-slate-600 text-center py-4">No cards</div>
+                    ) : (
+                      (selectedHistoryRetro.dakiCards || [])
+                        .filter(c => c.column === 'improve')
+                        .map(card => (
+                          <div key={card.id} className="daki-card-item bg-cyan-950/10 border-cyan-500/10">
+                            <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
+                            <div className="flex items-center justify-between mt-1 text-[10px]">
+                              <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
+                                {card.category || 'General'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 flex items-center gap-0.5">
+                                  <Star className="w-3 h-3 text-amber-400 fill-current" /> {card.votes}
+                                </span>
+                                <span className="text-slate-500 truncate max-w-[80px]" title={card.authorName}>
+                                  {card.authorEmoji} {card.authorName}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {modalTab === 'actions' && (
+              <div className="flex flex-col gap-4">
+                {(selectedHistoryRetro.actionItems || []).length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 text-sm border border-dashed border-white/10 rounded-2xl">
+                    <CheckSquare className="w-8 h-8 opacity-25 mx-auto mb-2" />
+                    No Action Items were committed in this session.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-white/5 rounded-xl">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-900/80 text-slate-400 border-b border-white/10 font-bold uppercase tracking-wider">
+                          <th className="p-3">Description</th>
+                          <th className="p-3">Assignee</th>
+                          <th className="p-3">Due Date</th>
+                          <th className="p-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 bg-slate-950/20">
+                        {(selectedHistoryRetro.actionItems || []).map(item => {
+                          const assignee = retroTeam?.members.find(m => m.id === item.assigneeId);
+                          return (
+                            <tr key={item.id} className="hover:bg-white/5 transition-colors">
+                              <td className="p-3 text-slate-200 font-medium">{item.description}</td>
+                              <td className="p-3 text-slate-300">
+                                {assignee ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <span>{assignee.emoji}</span>
+                                    <span>{assignee.name}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500">Unassigned / Unknown</span>
+                                )}
+                              </td>
+                              <td className="p-3 font-mono text-slate-400">{item.dueDate}</td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  item.status === 'Resolved' 
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                    : item.status === 'In Progress'
+                                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                }`}>
+                                  {item.status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 animate-fade-in">
+
       {/* Left Columns - Setup card */}
       <div className="md:col-span-2 flex flex-col gap-6">
         
@@ -558,11 +1033,13 @@ export const SetupPhase: React.FC = () => {
                 <p className="text-xs">Your completed sessions will appear here.</p>
               </div>
             ) : (
-              teamHistory.map(session => (
-                <div 
-                  key={session.id}
-                  className="p-3.5 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col gap-2 hover:bg-slate-950/60 transition-all duration-200"
-                >
+               teamHistory.map(session => (
+                 <div 
+                   key={session.id}
+                   onClick={() => { playClick(); setSelectedHistoryRetro(session); setModalTab('overview'); }}
+                   className="p-3.5 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col gap-2 hover:bg-slate-950/60 cursor-pointer hover:border-indigo-500/50 hover:-translate-y-0.5 transition-all duration-200"
+                 >
+
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
                       Retro Archive
@@ -596,6 +1073,8 @@ export const SetupPhase: React.FC = () => {
           </div>
         </Card>
       </div>
+      {renderHistoryDetailModal()}
     </div>
   );
 };
+

@@ -7,7 +7,8 @@ import {
   BrainCircuit,
   LayoutGrid, 
   TrendingUp, 
-  Award 
+  Award,
+  Trophy
 } from 'lucide-react';
 import { playClick } from '../utils/sound';
 
@@ -25,8 +26,10 @@ const PHASES = [
   { label: 'AI Adoption', icon: BrainCircuit },
   { label: 'DAKI Board', icon: LayoutGrid },
   { label: 'Prioritize', icon: TrendingUp },
+  { label: 'Star of Release', icon: Trophy },
   { label: 'Retro Score', icon: Award }
 ];
+
 
 export const Stepper: React.FC<StepperProps> = ({
   currentPhase,
