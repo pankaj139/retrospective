@@ -37,7 +37,7 @@ export const Stepper: React.FC<StepperProps> = ({
   maxPhaseVisited
 }) => {
   return (
-    <div className="w-full flex items-center justify-between overflow-x-auto py-3 px-4 bg-slate-950/40 border-b border-white/5 backdrop-blur-md">
+    <div className="w-full flex items-center justify-between overflow-x-auto py-3 px-4 border-b border-white/5" style={{ background: 'rgba(8, 10, 20, 0.96)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
       <div className="max-w-6xl mx-auto w-full flex items-center justify-between min-w-[700px] px-4">
         {PHASES.map((phase, index) => {
           const phaseNum = index + 1;

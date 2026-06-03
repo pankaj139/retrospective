@@ -75,7 +75,7 @@ const AppContent: React.FC = () => {
   return (
     <div className="app-container">
       {/* Global Header */}
-      <header className="w-full py-4 px-6 bg-slate-950/20 border-b border-white/5 backdrop-blur-md flex items-center justify-between z-10">
+      <header className="w-full py-4 px-6 border-b border-white/5 flex items-center justify-between z-40" style={{ position: 'sticky', top: 0, background: 'rgba(8, 10, 20, 0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-600/20">
             <LayoutGrid className="w-5 h-5 text-white" />
@@ -113,11 +113,13 @@ const AppContent: React.FC = () => {
 
       {/* Stepper indicators if inside active retro */}
       {currentRetro && hasJoined && (
-        <Stepper
-          currentPhase={currentRetro.phase}
-          onPhaseSelect={setPhase}
-          maxPhaseVisited={maxPhaseVisited}
-        />
+        <div style={{ position: 'sticky', top: '65px', zIndex: 30 }}>
+          <Stepper
+            currentPhase={currentRetro.phase}
+            onPhaseSelect={setPhase}
+            maxPhaseVisited={maxPhaseVisited}
+          />
+        </div>
       )}
 
       {/* Main Content Area */}
