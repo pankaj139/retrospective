@@ -24,6 +24,7 @@ const AppContent: React.FC = () => {
   const { currentRetro, setPhase, nextPhase, teams, selectedTeamId, cancelRetro, leaveRetro, hasJoined, currentUserMemberId } = useRetro();
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
+  const activeMember = team?.members.find(member => member.id === currentUserMemberId);
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
   const maxPhaseVisited = currentRetro && hasJoined ? currentRetro.phase : 1;
@@ -82,7 +83,7 @@ const AppContent: React.FC = () => {
   return (
     <div className="app-container">
       {/* Global Header */}
-      <header className="w-full py-4 px-6 border-b border-white/5 flex items-center justify-between z-40" style={{ position: 'sticky', top: 0, background: 'rgba(8, 10, 20, 0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+      <header className="w-full py-4 px-6 border-b border-white/10 flex items-center justify-between z-50" style={{ position: 'sticky', top: 0, background: 'rgba(8, 10, 20, 0.98)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-600/20">
             <LayoutGrid className="w-5 h-5 text-white" />
@@ -92,7 +93,9 @@ const AppContent: React.FC = () => {
               DAKI Retro Hub
             </h1>
             <p className="text-[10px] text-slate-400 font-medium">
-              {(!currentRetro || !hasJoined) ? 'Team Setup & History' : `Active Session • ${team?.name}`}
+              {(!currentRetro || !hasJoined)
+                ? 'Team Setup & History'
+                : `Active Session • ${team?.name}${activeMember ? ` • ${activeMember.emoji} ${activeMember.name}` : ''}`}
             </p>
           </div>
         </div>

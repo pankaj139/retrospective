@@ -141,20 +141,20 @@ export const PrevActionsPhase: React.FC = () => {
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {previousActionItems.map(item => {
               const assignee = getMemberDetails(item.assigneeId);
               
               return (
                 <div 
                   key={item.id}
-                  className="p-4 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:bg-slate-950/60 transition-all duration-200"
+                  className="p-3.5 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col items-start gap-3 hover:bg-slate-950/60 transition-all duration-200"
                 >
                   <div className="flex-1 min-w-0 w-full">
-                    <p className="text-sm font-semibold text-slate-100 mb-1.5 leading-relaxed">
+                    <p className="text-sm font-semibold text-slate-100 mb-1 leading-relaxed">
                       {item.description}
                     </p>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                    <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-400">
                       <span className="flex items-center gap-1.5 bg-slate-900 px-2 py-0.5 rounded border border-white/5">
                         <User className="w-3.5 h-3.5 text-slate-500" />
                         <span className="text-[10px]">{assignee.emoji}</span>
@@ -171,12 +171,12 @@ export const PrevActionsPhase: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="mt-3">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                    <div className="mt-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
                         <MessageSquare className="w-3.5 h-3.5" />
                         Progress Comment
                       </label>
-                      <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="flex flex-col gap-2">
                         <textarea
                           value={commentDrafts[item.id] ?? item.progressComment ?? ''}
                           onChange={(e) => setCommentDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
@@ -187,7 +187,7 @@ export const PrevActionsPhase: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-9 shrink-0"
+                          className="h-9 w-full"
                           onClick={() => handleSaveComment(item.id, item.status)}
                         >
                           Save Comment
