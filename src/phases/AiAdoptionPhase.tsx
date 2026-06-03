@@ -4,7 +4,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { AI_ADOPTION_QUESTIONS } from '../utils/mockData';
 import { playClick, playSuccess } from '../utils/sound';
-import { BrainCircuit, ArrowLeft, ArrowRight, Wand2, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { BrainCircuit, ArrowLeft, ArrowRight, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 export const AiAdoptionPhase: React.FC = () => {
   const { 
@@ -46,31 +46,6 @@ export const AiAdoptionPhase: React.FC = () => {
 
   const handleSliderChange = (questionId: string, val: number) => {
     setRatings(prev => ({ ...prev, [questionId]: val }));
-  };
-
-  const handleSimulateVotes = () => {
-    playClick();
-    if (!currentRetro || !team) return;
-
-    team.members.forEach(member => {
-      if (member.id === currentUserMemberId) {
-        // Submit user's current local ratings
-        AI_ADOPTION_QUESTIONS.forEach(question => {
-          const val = ratings[question.id] || 3;
-          setAiAdoptionScore(member.id, question.id, val);
-        });
-      } else {
-        // Generate mock ratings for other team members
-        AI_ADOPTION_QUESTIONS.forEach(question => {
-          const randomVal = 2.0 + Math.random() * 3.0; // Averages between 2.0 and 5.0
-          const rounded = Math.round(randomVal * 10) / 10;
-          setAiAdoptionScore(member.id, question.id, rounded);
-        });
-      }
-    });
-    
-    setReevaluating(false);
-    playSuccess();
   };
 
   const handleSubmit = () => {
@@ -146,11 +121,6 @@ export const AiAdoptionPhase: React.FC = () => {
           )}
           {!submitted && !allSubmitted && (
             <>
-              {isFacilitator && (
-                <Button variant="outline" size="sm" onClick={handleSimulateVotes} icon={<Wand2 className="w-4 h-4" />}>
-                  Simulate AI Ratings
-                </Button>
-              )}
               <Button variant="primary" size="sm" onClick={handleSubmit} icon={<CheckCircle2 className="w-4 h-4" />}>
                 Submit My Ratings
               </Button>

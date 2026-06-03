@@ -4,7 +4,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { HEALTH_METRICS } from '../utils/mockData';
 import { playClick, playSuccess } from '../utils/sound';
-import { Activity, ArrowLeft, ArrowRight, Wand2, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 export const HealthCheckPhase: React.FC = () => {
   const { 
@@ -46,31 +46,6 @@ export const HealthCheckPhase: React.FC = () => {
 
   const handleSliderChange = (metricId: string, val: number) => {
     setRatings(prev => ({ ...prev, [metricId]: val }));
-  };
-
-  const handleSimulateVotes = () => {
-    playClick();
-    if (!currentRetro || !team) return;
-
-    team.members.forEach(member => {
-      if (member.id === currentUserMemberId) {
-        // Submit user's current local ratings
-        HEALTH_METRICS.forEach(metric => {
-          const val = ratings[metric.id] || 3;
-          setHealthScore(member.id, metric.id, val);
-        });
-      } else {
-        // Generate mock ratings for other team members
-        HEALTH_METRICS.forEach(metric => {
-          const randomVal = 2.5 + Math.random() * 2.5; // Averages between 2.5 and 5.0
-          const rounded = Math.round(randomVal * 10) / 10;
-          setHealthScore(member.id, metric.id, rounded);
-        });
-      }
-    });
-    
-    setReevaluating(false);
-    playSuccess();
   };
 
   const handleSubmit = () => {
@@ -146,11 +121,6 @@ export const HealthCheckPhase: React.FC = () => {
           )}
           {!submitted && !allSubmitted && (
             <>
-              {isFacilitator && (
-                <Button variant="outline" size="sm" onClick={handleSimulateVotes} icon={<Wand2 className="w-4 h-4" />}>
-                  Simulate Team Votes
-                </Button>
-              )}
               <Button variant="primary" size="sm" onClick={handleSubmit} icon={<CheckCircle2 className="w-4 h-4" />}>
                 Submit My Score
               </Button>

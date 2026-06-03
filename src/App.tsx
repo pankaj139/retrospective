@@ -12,11 +12,17 @@ import { PrioritizePhase } from './phases/PrioritizePhase';
 import { StarOfReleasePhase } from './phases/StarOfReleasePhase';
 import { ScorePhase } from './phases/ScorePhase';
 import { playClick } from './utils/sound';
-import { LayoutGrid, XOctagon, LogOut } from 'lucide-react';
+import { LayoutGrid, XOctagon, LogOut, SkipForward } from 'lucide-react';
 import './App.css';
 
+const PHASE_LABELS = [
+  'Warmup Game', 'Icebreaker', 'Prev Actions', 'Health Check',
+  'AI Adoption', 'DAKI Board', 'Prioritize', 'Star of Release', 'Retro Score'
+];
+
 const AppContent: React.FC = () => {
-  const { currentRetro, setPhase, teams, selectedTeamId, cancelRetro, leaveRetro, hasJoined, currentUserMemberId } = useRetro();
+  const { currentRetro, setPhase, nextPhase, teams, selectedTeamId, cancelRetro, leaveRetro, hasJoined, currentUserMemberId } = useRetro();
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
@@ -43,6 +49,16 @@ const AppContent: React.FC = () => {
       playClick();
       leaveRetro();
     }
+  };
+
+  const handleSkipSection = () => {
+    setShowSkipConfirm(true);
+  };
+
+  const confirmSkip = () => {
+    playClick();
+    nextPhase();
+    setShowSkipConfirm(false);
   };
 
   const renderActivePhase = () => {
@@ -126,6 +142,55 @@ const AppContent: React.FC = () => {
       <main className="content-container flex-1">
         {renderActivePhase()}
       </main>
+
+      {/* Skip Section – Moderator only, not on final phase */}
+      {currentRetro && hasJoined && isFacilitator && currentRetro.phase < 9 && (
+        <button
+          id="skip-section-btn"
+          onClick={handleSkipSection}
+          className="skip-section-fab"
+          title="Skip this section (moderator only)"
+        >
+          <SkipForward className="w-4 h-4" />
+          <span>Skip Section</span>
+        </button>
+      )}
+
+      {/* Skip confirmation modal */}
+      {showSkipConfirm && (
+        <div className="skip-confirm-backdrop" onClick={() => setShowSkipConfirm(false)}>
+          <div className="skip-confirm-card" onClick={e => e.stopPropagation()}>
+            <div className="skip-confirm-icon">
+              <SkipForward className="w-6 h-6" />
+            </div>
+            <h3 className="skip-confirm-title">Skip this section?</h3>
+            <p className="skip-confirm-desc">
+              You're about to skip&nbsp;
+              <span className="skip-confirm-phase">
+                {PHASE_LABELS[(currentRetro?.phase ?? 1) - 1]}
+              </span>
+              &nbsp;and move to the next section. This action will affect all participants.
+            </p>
+            <div className="skip-confirm-actions">
+              <button
+                id="skip-cancel-btn"
+                onClick={() => setShowSkipConfirm(false)}
+                className="skip-cancel-btn"
+              >
+                Cancel
+              </button>
+              <button
+                id="skip-confirm-btn"
+                onClick={confirmSkip}
+                className="skip-do-btn"
+              >
+                <SkipForward className="w-4 h-4" />
+                Yes, Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footnote */}
       <footer className="w-full text-center py-4 text-[11px] text-slate-600 border-t border-white/5 bg-slate-950/20">

@@ -317,19 +317,12 @@ const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUser
   const hasVoted = card.votedBy?.includes(currentUserMemberId);
 
   return (
-    <div className={`daki-card-item flex flex-col justify-between h-auto gap-3 animate-fade-in
-      ${card.isSimulated ? 'border-indigo-500/20 bg-indigo-950/5' : ''}
-    `}>
+    <div className="daki-card-item flex flex-col justify-between h-auto gap-3 animate-fade-in">
       <div className="flex-1">
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className={`badge text-[8px] font-semibold border ${getBadge(card.category || '')}`}>
             {card.category}
           </span>
-          {card.isSimulated && (
-            <span className="text-[8px] text-indigo-400 bg-indigo-500/15 border border-indigo-500/20 px-1 py-0.2 rounded uppercase font-bold tracking-wider">
-              Simulated
-            </span>
-          )}
         </div>
         <p className="text-xs text-slate-200 leading-relaxed font-medium">
           {card.content}
