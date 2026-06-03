@@ -172,11 +172,17 @@ export const SetupPhase: React.FC = () => {
 
     return (
       <div 
-        className="fixed inset-0 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm z-50 p-4"
+        className="fixed inset-0 flex items-center justify-center z-50 p-4"
+        style={{ background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
         onClick={() => setSelectedHistoryRetro(null)}
       >
         <div 
-          className="glass-panel rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-6"
+          className="rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-6"
+          style={{
+            background: 'linear-gradient(145deg, #0f1523 0%, #0a0e1a 100%)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 25px 80px rgba(0,0,0,0.8), 0 0 60px rgba(99,102,241,0.08)'
+          }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
