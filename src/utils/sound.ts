@@ -3,10 +3,14 @@
 
 let audioCtx: AudioContext | null = null;
 
+type LegacyWindowAudio = Window & {
+  webkitAudioContext?: typeof AudioContext;
+};
+
 const getAudioContext = (): AudioContext | null => {
   if (typeof window === 'undefined') return null;
   if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass = window.AudioContext || (window as LegacyWindowAudio).webkitAudioContext;
     if (AudioContextClass) {
       audioCtx = new AudioContextClass();
     }

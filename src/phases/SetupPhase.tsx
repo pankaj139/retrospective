@@ -129,6 +129,7 @@ export const SetupPhase: React.FC = () => {
     
     const dakiCount = selectedHistoryRetro.dakiCards?.length || 0;
     const actionCount = selectedHistoryRetro.actionItems?.length || 0;
+    const memberFeedbackEntries = Object.entries(selectedHistoryRetro.memberRetroFeedback || {}).filter(([, text]) => text.trim());
     
     const getHealthAverage = (metricId: string) => {
       const scores: number[] = [];
@@ -271,18 +272,38 @@ export const SetupPhase: React.FC = () => {
                       </div>
                     </div>
 
-                    {selectedHistoryRetro.retroFeedback ? (
-                      <div className="relative mt-2 p-4 bg-slate-950/40 border border-white/5 rounded-xl italic text-slate-300 text-sm">
-                        <span className="absolute -top-3 left-4 bg-slate-900 px-2 text-[10px] uppercase font-bold text-slate-500 not-italic">
-                          Facilitator Feedback
-                        </span>
-                        "{selectedHistoryRetro.retroFeedback}"
+                    <div className="mt-2 p-4 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col gap-3">
+                      <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wide">
+                        Final Team Feedback ({memberFeedbackEntries.length})
                       </div>
-                    ) : (
-                      <div className="text-xs text-slate-500 italic mt-2">
-                        No closing feedback was provided for this session.
-                      </div>
-                    )}
+
+                      {memberFeedbackEntries.length > 0 ? (
+                        <div className="max-h-[180px] overflow-y-auto pr-1 flex flex-col gap-2">
+                          {memberFeedbackEntries.map(([memberId, text]) => {
+                            const member = retroTeam?.members.find(m => m.id === memberId);
+                            return (
+                              <div key={memberId} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                                <div className="text-[11px] text-indigo-300 font-semibold mb-1">
+                                  {member?.emoji || '👤'} {member?.name || 'Team Member'}
+                                </div>
+                                <p className="text-xs text-slate-300 whitespace-pre-wrap">{text}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500 italic">
+                          No final feedback entries were captured for this session.
+                        </div>
+                      )}
+
+                      {selectedHistoryRetro.retroFeedback && (
+                        <div className="pt-2 border-t border-white/5">
+                          <span className="text-[10px] uppercase font-bold text-slate-500">Facilitator Summary</span>
+                          <p className="text-xs text-slate-300 italic mt-1">"{selectedHistoryRetro.retroFeedback}"</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   {/* Additional info or game scores summary */}
@@ -1068,6 +1089,9 @@ export const SetupPhase: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-slate-500">Effective Score:</span> {session.retroScore}/5 ⭐
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Final Feedback:</span> {Object.keys(session.memberRetroFeedback || {}).length}
                     </div>
                   </div>
                   

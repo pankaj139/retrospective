@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -22,14 +22,9 @@ export const IcebreakerPhase: React.FC = () => {
   const myMember = team?.members.find(m => m.id === currentUserMemberId);
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
-  const [currentText, setCurrentText] = useState('');
-
-  // Synchronize local input state with database value for current user
-  useEffect(() => {
-    if (currentUserMemberId && currentRetro) {
-      setCurrentText(currentRetro.icebreakerAnswers[currentUserMemberId] || '');
-    }
-  }, [currentUserMemberId, currentRetro?.icebreakerAnswers]);
+  const [draftText, setDraftText] = useState<string | null>(null);
+  const savedText = currentUserMemberId ? (currentRetro?.icebreakerAnswers[currentUserMemberId] || '') : '';
+  const currentText = draftText ?? savedText;
 
   const handleNextQuestion = () => {
     playClick();
@@ -40,7 +35,7 @@ export const IcebreakerPhase: React.FC = () => {
       nextQ = ICEBREAKER_QUESTIONS[Math.floor(Math.random() * ICEBREAKER_QUESTIONS.length)];
     }
     setIcebreakerQuestion(nextQ);
-    setCurrentText('');
+    setDraftText('');
   };
 
   const handleSaveAnswer = () => {
@@ -48,6 +43,7 @@ export const IcebreakerPhase: React.FC = () => {
 
     playClick();
     setIcebreakerAnswer(currentUserMemberId, currentText);
+    setDraftText(currentText);
     playSuccess();
   };
 
@@ -130,7 +126,7 @@ export const IcebreakerPhase: React.FC = () => {
                 </label>
                 <textarea
                   value={currentText}
-                  onChange={e => setCurrentText(e.target.value)}
+                  onChange={e => setDraftText(e.target.value)}
                   placeholder="Type your answer here..."
                   rows={3}
                   className="form-input text-base leading-relaxed py-3"

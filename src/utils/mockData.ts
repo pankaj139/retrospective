@@ -18,6 +18,7 @@ export interface ActionItem {
   dueDate: string;
   status: 'Open' | 'In Progress' | 'Resolved';
   createdInRetro: string;
+  progressComment?: string;
 }
 
 export interface RetroSession {
@@ -33,6 +34,7 @@ export interface RetroSession {
   actionItems: ActionItem[];
   retroScore: number;
   retroFeedback: string;
+  memberRetroFeedback: Record<string, string>;
   gameStatus?: string;
   gameStartedAt?: string;
   icebreakerQuestion?: string;

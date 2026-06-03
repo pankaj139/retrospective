@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { RetroProvider, useRetro } from './context/RetroContext';
 import { Stepper } from './components/Stepper';
 import { SetupPhase } from './phases/SetupPhase';
@@ -26,16 +26,7 @@ const AppContent: React.FC = () => {
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
-  // Track max phase visited during active session to unlock stepper steps
-  const [maxPhaseVisited, setMaxPhaseVisited] = useState(1);
-
-  useEffect(() => {
-    if (currentRetro && hasJoined) {
-      setMaxPhaseVisited(prev => Math.max(prev, currentRetro.phase));
-    } else {
-      setMaxPhaseVisited(1);
-    }
-  }, [currentRetro?.phase, currentRetro, hasJoined]);
+  const maxPhaseVisited = currentRetro && hasJoined ? currentRetro.phase : 1;
 
   const handleAbort = () => {
     if (window.confirm('Are you sure you want to abort this retrospective session? This will end the active session for all team members and erase all unsaved progress.')) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -6,23 +6,74 @@ import { playClick, playSuccess } from '../utils/sound';
 import { Award, ArrowLeft, Trophy, Activity, LayoutGrid, FileText, CheckCircle, Star } from 'lucide-react';
 
 export const ScorePhase: React.FC = () => {
-  const { currentRetro, teams, selectedTeamId, setRetroScore, completeRetro, prevPhase, currentUserMemberId } = useRetro();
+  const {
+    currentRetro,
+    teams,
+    selectedTeamId,
+    submitRetroFeedback,
+    setRetroScore,
+    completeRetro,
+    prevPhase,
+    currentUserMemberId
+  } = useRetro();
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
   const [score, setScore] = useState(5);
-  const [feedback, setFeedback] = useState('');
+  const [myFeedbackDraft, setMyFeedbackDraft] = useState<string | null>(null);
+  const [facilitatorFeedbackDraft, setFacilitatorFeedbackDraft] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [archiveError, setArchiveError] = useState('');
+
+  const feedbackMap = useMemo(() => currentRetro?.memberRetroFeedback ?? {}, [currentRetro?.memberRetroFeedback]);
+  const mySavedFeedback = feedbackMap[currentUserMemberId] || '';
+  const myFeedback = myFeedbackDraft ?? mySavedFeedback;
+  const facilitatorFeedback = facilitatorFeedbackDraft ?? (currentRetro?.retroFeedback || '');
+  const hasSubmittedMyFeedback = Boolean(mySavedFeedback.trim());
+  const pendingMembers = useMemo(
+    () => (team?.members || []).filter(member => !feedbackMap[member.id]?.trim()),
+    [team?.members, feedbackMap]
+  );
+  const pendingMemberNames = pendingMembers.map(member => member.name);
+  const allFeedbackSubmitted = (team?.members?.length || 0) > 0 && pendingMembers.length === 0;
 
   const handleRatingSelect = (rate: number) => {
     playClick();
     setScore(rate);
   };
 
-  const handleFinish = () => {
+  const handleSubmitMyFeedback = async () => {
+    if (!currentUserMemberId || !myFeedback.trim()) return;
+
+    playClick();
+    await submitRetroFeedback(currentUserMemberId, myFeedback);
+    setMyFeedbackDraft(myFeedback);
+  };
+
+  const handleFinish = async () => {
+    if (!isFacilitator) return;
+    if (!allFeedbackSubmitted) {
+      setArchiveError('Archive is locked until all team members submit final feedback.');
+      return;
+    }
+
     playSuccess();
-    setRetroScore(score, feedback);
-    completeRetro();
+    setArchiveError('');
+    await setRetroScore(score, facilitatorFeedback);
+    const completionResult = await completeRetro();
+
+    if (!completionResult.ok) {
+      const missingNames = team.members
+        .filter(member => completionResult.missingMemberIds.includes(member.id))
+        .map(member => member.name);
+      setArchiveError(
+        missingNames.length > 0
+          ? `Still waiting for feedback from: ${missingNames.join(', ')}`
+          : 'Archive is locked until all team members submit final feedback.'
+      );
+      return;
+    }
+
     setCompleted(true);
   };
 
@@ -94,6 +145,7 @@ export const ScorePhase: React.FC = () => {
               <Button
                 variant="success"
                 size="sm"
+                disabled={!allFeedbackSubmitted}
                 onClick={handleFinish}
                 icon={<CheckCircle className="w-4 h-4" />}
                 glow
@@ -108,6 +160,25 @@ export const ScorePhase: React.FC = () => {
           )}
         </div>
       </div>
+
+      {isFacilitator && !allFeedbackSubmitted && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 text-xs text-amber-300 flex flex-col gap-1.5">
+          <span>
+            Waiting on {pendingMembers.length} teammate{pendingMembers.length === 1 ? '' : 's'} to submit final feedback.
+          </span>
+          {pendingMemberNames.length > 0 && (
+            <span className="text-[11px] text-amber-200/90">
+              Pending: {pendingMemberNames.join(', ')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {archiveError && (
+        <div className="rounded-xl border border-rose-500/25 bg-rose-500/5 px-4 py-2.5 text-xs text-rose-300">
+          {archiveError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Rating selectors */}
@@ -144,15 +215,43 @@ export const ScorePhase: React.FC = () => {
 
             <div className="flex flex-col gap-1.5 mt-2">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                Optional Feedback / Notes
+                My Final Feedback {hasSubmittedMyFeedback && <span className="text-emerald-400 normal-case">(Submitted)</span>}
               </label>
               <textarea
-                placeholder="What went well about this meeting? What could we improve for our next retro?"
+                placeholder="Share your final retro feedback. You can update this any time before archive."
                 rows={3}
-                value={feedback}
-                onChange={e => setFeedback(e.target.value)}
+                value={myFeedback}
+                onChange={e => setMyFeedbackDraft(e.target.value)}
                 className="form-input text-xs leading-relaxed py-2.5"
               />
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSubmitMyFeedback}
+                disabled={!myFeedback.trim()}
+                icon={<CheckCircle className="w-4 h-4" />}
+              >
+                {hasSubmittedMyFeedback ? 'Update My Feedback' : 'Submit My Feedback'}
+              </Button>
+            </div>
+
+            {isFacilitator && (
+              <div className="flex flex-col gap-1.5 mt-2 border-t border-white/5 pt-3">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                  Facilitator Session Summary (Archive View)
+                </label>
+                <textarea
+                  placeholder="Optional summary shown in archive details."
+                  rows={3}
+                  value={facilitatorFeedback}
+                  onChange={e => setFacilitatorFeedbackDraft(e.target.value)}
+                  className="form-input text-xs leading-relaxed py-2.5"
+                />
+              </div>
+            )}
+
+            <div className="text-[11px] text-slate-400 border-t border-white/5 pt-3">
+              Feedback submitted: <span className="font-semibold text-emerald-400">{team.members.length - pendingMembers.length}</span> / {team.members.length}
             </div>
           </Card>
         </div>

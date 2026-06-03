@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { 
@@ -35,9 +36,10 @@ interface RetroContextType {
   voteDakiCard: (cardId: string, memberId: string) => Promise<void>;
   deleteDakiCard: (cardId: string) => Promise<void>;
   addActionItem: (description: string, assigneeId: string, dueDate: string) => Promise<void>;
-  updatePrevActionItemStatus: (itemId: string, status: ActionItem['status']) => Promise<void>;
+  updatePrevActionItemStatus: (itemId: string, status: ActionItem['status'], progressComment?: string) => Promise<void>;
+  submitRetroFeedback: (memberId: string, feedback: string) => Promise<void>;
   setRetroScore: (score: number, feedback: string) => Promise<void>;
-  completeRetro: () => Promise<void>;
+  completeRetro: () => Promise<{ ok: boolean; missingMemberIds: string[] }>;
   cancelRetro: () => Promise<void>;
   leaveRetro: () => void;
   addSimulatedDakiCard: () => Promise<void>;
@@ -51,8 +53,31 @@ interface RetroContextType {
 
 const RetroContext = createContext<RetroContextType | undefined>(undefined);
 
+type DbCardRow = {
+  id: string;
+  column_name: string;
+  content: string;
+  votes: number;
+  author_id: string;
+  author_name: string;
+  author_emoji: string;
+  category?: string;
+  is_simulated?: boolean;
+  voted_by?: string[];
+};
+
+type DbActionRow = {
+  id: string;
+  description: string;
+  assignee_id: string;
+  due_date: string;
+  status: ActionItem['status'];
+  created_in_retro: string;
+  progress_comment?: string;
+};
+
 // Map database card structure to client structure
-const mapCardFromDb = (dbCard: any): DakiCard => ({
+const mapCardFromDb = (dbCard: DbCardRow): DakiCard => ({
   id: dbCard.id,
   column: dbCard.column_name as 'drop' | 'add' | 'keep' | 'improve',
   content: dbCard.content,
@@ -64,6 +89,114 @@ const mapCardFromDb = (dbCard: any): DakiCard => ({
   isSimulated: dbCard.is_simulated,
   votedBy: dbCard.voted_by || []
 });
+
+const ACTION_COMMENTS_STORAGE_PREFIX = 'daki_retro_action_comments_';
+
+const getActionCommentsStorageKey = (teamId: string): string => `${ACTION_COMMENTS_STORAGE_PREFIX}${teamId}`;
+
+const loadLocalActionComments = (teamId: string): Record<string, string> => {
+  if (!teamId) return {};
+
+  try {
+    const saved = localStorage.getItem(getActionCommentsStorageKey(teamId));
+    if (!saved) return {};
+    const parsed = JSON.parse(saved);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    console.warn('[RetroHub] Failed to parse local action comments.', error);
+    return {};
+  }
+};
+
+const saveLocalActionComment = (teamId: string, itemId: string, comment: string) => {
+  if (!teamId || !itemId) return;
+
+  const existing = loadLocalActionComments(teamId);
+  const trimmedComment = comment.trim();
+
+  if (trimmedComment) {
+    existing[itemId] = trimmedComment;
+  } else {
+    delete existing[itemId];
+  }
+
+  localStorage.setItem(getActionCommentsStorageKey(teamId), JSON.stringify(existing));
+};
+
+const mapActionItemFromDb = (dbAction: DbActionRow, localComments: Record<string, string> = {}): ActionItem => {
+  const commentFromDb = typeof dbAction.progress_comment === 'string' ? dbAction.progress_comment.trim() : '';
+  return {
+    id: dbAction.id,
+    description: dbAction.description,
+    assigneeId: dbAction.assignee_id,
+    dueDate: dbAction.due_date,
+    status: dbAction.status,
+    createdInRetro: dbAction.created_in_retro,
+    progressComment: commentFromDb || localComments[dbAction.id] || ''
+  };
+};
+
+type RetroFeedbackPayload = {
+  facilitatorFeedback: string;
+  memberFeedback: Record<string, string>;
+};
+
+const getDefaultRetroFeedbackPayload = (): RetroFeedbackPayload => ({
+  facilitatorFeedback: '',
+  memberFeedback: {}
+});
+
+const normalizeMemberFeedback = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((acc, [memberId, feedback]) => {
+    if (typeof feedback === 'string' && feedback.trim()) {
+      acc[memberId] = feedback.trim();
+    }
+    return acc;
+  }, {});
+};
+
+const parseRetroFeedback = (rawFeedback: unknown): RetroFeedbackPayload => {
+  if (!rawFeedback) return getDefaultRetroFeedbackPayload();
+
+  if (typeof rawFeedback === 'object') {
+    const parsedObject = rawFeedback as Record<string, unknown>;
+    return {
+      facilitatorFeedback: typeof parsedObject.facilitatorFeedback === 'string' ? parsedObject.facilitatorFeedback : '',
+      memberFeedback: normalizeMemberFeedback(parsedObject.memberFeedback)
+    };
+  }
+
+  if (typeof rawFeedback !== 'string') return getDefaultRetroFeedbackPayload();
+
+  const trimmed = rawFeedback.trim();
+  if (!trimmed) return getDefaultRetroFeedbackPayload();
+
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object') {
+      return {
+        facilitatorFeedback: typeof parsed.facilitatorFeedback === 'string' ? parsed.facilitatorFeedback : '',
+        memberFeedback: normalizeMemberFeedback(parsed.memberFeedback)
+      };
+    }
+  } catch {
+    // Backward compatibility: legacy sessions store facilitator feedback as plain text.
+  }
+
+  return {
+    facilitatorFeedback: trimmed,
+    memberFeedback: {}
+  };
+};
+
+const serializeRetroFeedback = (payload: RetroFeedbackPayload): string => {
+  return JSON.stringify({
+    facilitatorFeedback: payload.facilitatorFeedback,
+    memberFeedback: payload.memberFeedback
+  });
+};
 
 export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -102,7 +235,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         if (dbTeams && dbTeams.length > 0) {
           const teamsWithMembers = await Promise.all(
-            dbTeams.map(async (t: any) => {
+            dbTeams.map(async (t) => {
               const { data: m, error: memError } = await supabase.from('team_members').select('*').eq('team_id', t.id);
               if (memError) {
                 console.error('[RetroHub] Error fetching members for team', t.name, memError);
@@ -110,7 +243,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               return {
                 id: t.id,
                 name: t.name,
-                members: (m || []).map((member: any) => ({
+                members: (m || []).map((member) => ({
                   id: member.id,
                   name: member.name,
                   role: member.role,
@@ -153,7 +286,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (dbSessions) {
         const sessionsWithDetails = await Promise.all(
-          dbSessions.map(async (s: any) => {
+          dbSessions.map(async (s) => {
             const { data: cards } = await supabase.from('daki_cards').select('*').eq('session_id', s.id);
             const { data: actions } = await supabase.from('action_items').select('*').eq('session_id', s.id);
             const { data: games } = await supabase.from('game_scores').select('*').eq('session_id', s.id);
@@ -187,6 +320,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               }
             });
 
+            const parsedFeedback = parseRetroFeedback(s.retro_feedback);
+
             return {
               id: s.id,
               teamId: s.team_id,
@@ -197,16 +332,10 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               healthCheckScores,
               aiAdoptionScores,
               dakiCards: (cards || []).map(mapCardFromDb),
-              actionItems: (actions || []).map((a: any) => ({
-                id: a.id,
-                description: a.description,
-                assigneeId: a.assignee_id,
-                dueDate: a.due_date,
-                status: a.status,
-                createdInRetro: a.created_in_retro
-              })),
+              actionItems: (actions || []).map((a) => mapActionItemFromDb(a)),
               retroScore: s.retro_score,
-              retroFeedback: s.retro_feedback
+              retroFeedback: parsedFeedback.facilitatorFeedback,
+              memberRetroFeedback: parsedFeedback.memberFeedback
             };
           })
         );
@@ -224,7 +353,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'teams' },
-        async (payload: any) => {
+        async (payload) => {
           console.log('[RetroHub] Realtime Team Event:', payload);
           if (payload.eventType === 'INSERT') {
             const newTeam = payload.new;
@@ -248,7 +377,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'team_members' },
-        (payload: any) => {
+        (payload) => {
           console.log('[RetroHub] Realtime Member Event:', payload);
           if (payload.eventType === 'INSERT') {
             const newMember = payload.new;
@@ -307,6 +436,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('daki_retro_selected_team', selectedTeamId);
 
     const loadSessionAndActions = async () => {
+      const localActionComments = loadLocalActionComments(selectedTeamId);
+
       // Load previous unresolved actions
       const { data: prevActions } = await supabase
         .from('action_items')
@@ -315,16 +446,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .neq('status', 'Resolved');
 
       if (prevActions) {
-        setPreviousActionItems(
-          prevActions.map((a: any) => ({
-            id: a.id,
-            description: a.description,
-            assigneeId: a.assignee_id,
-            dueDate: a.due_date,
-            status: a.status,
-            createdInRetro: a.created_in_retro
-          }))
-        );
+        setPreviousActionItems(prevActions.map((a) => mapActionItemFromDb(a, localActionComments)));
       } else {
         setPreviousActionItems([]);
       }
@@ -339,6 +461,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (activeSessions && activeSessions.length > 0) {
         const s = activeSessions[0];
+        const parsedFeedback = parseRetroFeedback(s.retro_feedback);
         
         // Fetch session components
         const { data: cards } = await supabase.from('daki_cards').select('*').eq('session_id', s.id);
@@ -386,16 +509,10 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           healthCheckScores,
           aiAdoptionScores,
           dakiCards: (cards || []).map(mapCardFromDb),
-          actionItems: (actions || []).map((a: any) => ({
-            id: a.id,
-            description: a.description,
-            assigneeId: a.assignee_id,
-            dueDate: a.due_date,
-            status: a.status,
-            createdInRetro: a.created_in_retro
-          })),
+          actionItems: (actions || []).map((a) => mapActionItemFromDb(a, localActionComments)),
           retroScore: s.retro_score,
-          retroFeedback: s.retro_feedback,
+          retroFeedback: parsedFeedback.facilitatorFeedback,
+          memberRetroFeedback: parsedFeedback.memberFeedback,
           gameStatus: s.game_status,
           gameStartedAt: s.game_started_at,
           icebreakerQuestion: s.icebreaker_question,
@@ -418,7 +535,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (activeTeam) {
       const isMember = activeTeam.members.some(m => m.id === currentUserMemberId);
       if (!isMember) {
-        setCurrentUserMemberId('');
+        queueMicrotask(() => setCurrentUserMemberId(''));
         localStorage.removeItem('daki_retro_member_id');
       }
     }
@@ -439,7 +556,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           schema: 'public', 
           table: 'retro_sessions' 
         },
-        async (payload: any) => {
+        async (payload) => {
           console.log('[RetroHub] Realtime Session Event received:', payload);
           
           if (payload.eventType === 'DELETE') {
@@ -465,6 +582,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (payload.eventType === 'INSERT') {
             if (s.status === 'active') {
               console.log('[RetroHub] Active session started for our team! Loading details...');
+              const parsedFeedback = parseRetroFeedback(s.retro_feedback);
               // Fetch details
               const { data: cards } = await supabase.from('daki_cards').select('*').eq('session_id', s.id);
               const { data: actions } = await supabase.from('action_items').select('*').eq('session_id', s.id);
@@ -511,16 +629,10 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 healthCheckScores,
                 aiAdoptionScores,
                 dakiCards: (cards || []).map(mapCardFromDb),
-                actionItems: (actions || []).map((a: any) => ({
-                  id: a.id,
-                  description: a.description,
-                  assigneeId: a.assignee_id,
-                  dueDate: a.due_date,
-                  status: a.status,
-                  createdInRetro: a.created_in_retro
-                })),
+                actionItems: (actions || []).map((a) => mapActionItemFromDb(a, loadLocalActionComments(s.team_id))),
                 retroScore: s.retro_score,
-                retroFeedback: s.retro_feedback,
+                retroFeedback: parsedFeedback.facilitatorFeedback,
+                memberRetroFeedback: parsedFeedback.memberFeedback,
                 gameStatus: s.game_status,
                 gameStartedAt: s.game_started_at,
                 icebreakerQuestion: s.icebreaker_question,
@@ -536,6 +648,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               setCurrentRetro(null);
               window.location.reload();
             } else if (s.status === 'active') {
+              const parsedFeedback = parseRetroFeedback(s.retro_feedback);
               console.log('[RetroHub] Session phase updated to:', s.phase);
               setCurrentRetro(prev => {
                 if (prev && prev.id === s.id) {
@@ -543,7 +656,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     ...prev,
                     phase: s.phase,
                     retroScore: s.retro_score,
-                    retroFeedback: s.retro_feedback,
+                    retroFeedback: parsedFeedback.facilitatorFeedback,
+                    memberRetroFeedback: parsedFeedback.memberFeedback,
                     gameStatus: s.game_status,
                     gameStartedAt: s.game_started_at,
                     icebreakerQuestion: s.icebreaker_question,
@@ -578,16 +692,16 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'daki_cards', filter: `session_id=eq.${sessionId}` },
-        (payload: any) => {
+        (payload) => {
           if (payload.eventType === 'INSERT') {
-            const newCard = mapCardFromDb(payload.new);
+            const newCard = mapCardFromDb(payload.new as DbCardRow);
             setCurrentRetro(prev => {
               if (!prev) return null;
               if (prev.dakiCards.some(c => c.id === newCard.id)) return prev;
               return { ...prev, dakiCards: [...prev.dakiCards, newCard] };
             });
           } else if (payload.eventType === 'UPDATE') {
-            const updatedCard = mapCardFromDb(payload.new);
+            const updatedCard = mapCardFromDb(payload.new as DbCardRow);
             setCurrentRetro(prev => {
               if (!prev) return null;
               return { ...prev, dakiCards: prev.dakiCards.map(c => (c.id === updatedCard.id ? updatedCard : c)) };
@@ -609,13 +723,16 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'game_scores', filter: `session_id=eq.${sessionId}` },
-        (payload: any) => {
-          const scoreRow = payload.new;
+        (payload) => {
+          const scoreRow = payload.new as { member_id?: string; score?: number };
+          if (!scoreRow.member_id || typeof scoreRow.score !== 'number') return;
+          const memberId = scoreRow.member_id;
+          const score = scoreRow.score;
           setCurrentRetro(prev => {
             if (!prev) return null;
             return {
               ...prev,
-              gameScores: { ...prev.gameScores, [scoreRow.member_id]: scoreRow.score }
+              gameScores: { ...prev.gameScores, [memberId]: score }
             };
           });
         }
@@ -628,7 +745,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'icebreaker_answers', filter: `session_id=eq.${sessionId}` },
-        (payload: any) => {
+        (payload) => {
           if (payload.eventType === 'DELETE') {
             const deletedRowId = payload.old.id;
             setCurrentRetro(prev => {
@@ -663,18 +780,21 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'health_check_scores', filter: `session_id=eq.${sessionId}` },
-        (payload: any) => {
-          const row = payload.new;
-          if (!row || !row.member_id) return;
+        (payload) => {
+          const row = payload.new as { member_id?: string; metric_id?: string; score?: number };
+          if (!row.member_id || !row.metric_id || typeof row.score !== 'number') return;
+          const memberId = row.member_id;
+          const metricId = row.metric_id;
+          const metricScore = row.score;
           setCurrentRetro(prev => {
             if (!prev) return null;
             const updatedScores = { ...prev.healthCheckScores };
-            if (!updatedScores[row.member_id]) {
-              updatedScores[row.member_id] = {};
+            if (!updatedScores[memberId]) {
+              updatedScores[memberId] = {};
             }
-            updatedScores[row.member_id] = {
-              ...updatedScores[row.member_id],
-              [row.metric_id]: Number(row.score)
+            updatedScores[memberId] = {
+              ...updatedScores[memberId],
+              [metricId]: Number(metricScore)
             };
             return {
               ...prev,
@@ -691,18 +811,21 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ai_adoption_scores', filter: `session_id=eq.${sessionId}` },
-        (payload: any) => {
-          const row = payload.new;
-          if (!row || !row.member_id) return;
+        (payload) => {
+          const row = payload.new as { member_id?: string; question_id?: string; score?: number };
+          if (!row.member_id || !row.question_id || typeof row.score !== 'number') return;
+          const memberId = row.member_id;
+          const questionId = row.question_id;
+          const questionScore = row.score;
           setCurrentRetro(prev => {
             if (!prev) return null;
             const updatedScores = { ...prev.aiAdoptionScores };
-            if (!updatedScores[row.member_id]) {
-              updatedScores[row.member_id] = {};
+            if (!updatedScores[memberId]) {
+              updatedScores[memberId] = {};
             }
-            updatedScores[row.member_id] = {
-              ...updatedScores[row.member_id],
-              [row.question_id]: Number(row.score)
+            updatedScores[memberId] = {
+              ...updatedScores[memberId],
+              [questionId]: Number(questionScore)
             };
             return {
               ...prev,
@@ -719,22 +842,36 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'action_items' },
-        (payload: any) => {
-          const item = payload.new;
-          if (payload.eventType === 'INSERT' && item.session_id === sessionId) {
+        (payload) => {
+          const item = payload.new as (DbActionRow & { session_id?: string }) | null;
+          if (payload.eventType === 'INSERT' && item?.session_id === sessionId) {
             setCurrentRetro(prev => {
               if (!prev) return null;
               if (prev.actionItems.some(i => i.id === item.id)) return prev;
               return {
                 ...prev,
-                actionItems: [...prev.actionItems, {
-                  id: item.id,
-                  description: item.description,
-                  assigneeId: item.assignee_id,
-                  dueDate: item.due_date,
-                  status: item.status,
-                  createdInRetro: item.created_in_retro
-                }]
+                actionItems: [...prev.actionItems, mapActionItemFromDb(item, loadLocalActionComments(prev.teamId))]
+              };
+            });
+          } else if (payload.eventType === 'UPDATE' && item?.session_id === sessionId) {
+            setCurrentRetro(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                actionItems: prev.actionItems.map((existingItem) => (
+                  existingItem.id === item.id
+                    ? mapActionItemFromDb(item, loadLocalActionComments(prev.teamId))
+                    : existingItem
+                ))
+              };
+            });
+          } else if (payload.eventType === 'DELETE' && payload.old?.session_id === sessionId) {
+            const deletedItemId = payload.old.id;
+            setCurrentRetro(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                actionItems: prev.actionItems.filter(existingItem => existingItem.id !== deletedItemId)
               };
             });
           }
@@ -748,16 +885,18 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'star_of_release_votes', filter: `session_id=eq.${sessionId}` },
-        (payload: any) => {
-          const row = payload.new;
-          if (!row || !row.voted_by_member_id) return;
+        (payload) => {
+          const row = payload.new as { voted_by_member_id?: string; nominee_member_id?: string };
+          if (!row.voted_by_member_id || !row.nominee_member_id) return;
+          const votedByMemberId = row.voted_by_member_id;
+          const nomineeMemberId = row.nominee_member_id;
           setCurrentRetro(prev => {
             if (!prev) return null;
             return {
               ...prev,
               starOfReleaseVotes: {
                 ...(prev.starOfReleaseVotes || {}),
-                [row.voted_by_member_id]: row.nominee_member_id
+                [votedByMemberId]: nomineeMemberId
               }
             };
           });
@@ -774,7 +913,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       supabase.removeChannel(actionsChannel);
       supabase.removeChannel(starVotesChannel);
     };
-  }, [currentRetro?.id]);
+  }, [currentRetro]);
 
   // Select team
   const selectTeam = (teamId: string) => {
@@ -871,6 +1010,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         actionItems: [],
         retroScore: 5,
         retroFeedback: '',
+        memberRetroFeedback: {},
         gameStatus: 'not_started',
         icebreakerQuestion: initialQuestion,
         createdBy: currentUserMemberId,
@@ -1099,11 +1239,63 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Update previous action item status
-  const updatePrevActionItemStatus = async (itemId: string, status: ActionItem['status']) => {
-    await supabase.from('action_items').update({ status }).eq('id', itemId);
-    
+  const updatePrevActionItemStatus = async (
+    itemId: string,
+    status: ActionItem['status'],
+    progressComment?: string
+  ) => {
+    const hasCommentUpdate = typeof progressComment === 'string';
+    const trimmedComment = hasCommentUpdate ? progressComment.trim() : undefined;
+    const updatePayload: Record<string, unknown> = { status };
+
+    if (hasCommentUpdate) {
+      updatePayload.progress_comment = trimmedComment;
+    }
+
+    const { error } = await supabase.from('action_items').update(updatePayload).eq('id', itemId);
+
+    if (hasCommentUpdate && selectedTeamId) {
+      saveLocalActionComment(selectedTeamId, itemId, trimmedComment || '');
+    }
+
+    if (error && !hasCommentUpdate) {
+      console.error('[RetroHub] Failed to update action item status.', error);
+      return;
+    }
+
+    if (error && hasCommentUpdate) {
+      const missingCommentColumn = error.message?.toLowerCase().includes('progress_comment');
+      if (!missingCommentColumn) {
+        console.error('[RetroHub] Failed to update action item comment.', error);
+        return;
+      }
+      console.warn('[RetroHub] progress_comment column missing in Supabase. Using local fallback storage.');
+    }
+
     // Update local state for immediate feedback
-    setPreviousActionItems(prev => prev.map(i => (i.id === itemId ? { ...i, status } : i)));
+    setPreviousActionItems(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+      return {
+        ...i,
+        status,
+        ...(hasCommentUpdate ? { progressComment: trimmedComment || '' } : {})
+      };
+    }));
+
+    setCurrentRetro(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        actionItems: prev.actionItems.map(i => {
+          if (i.id !== itemId) return i;
+          return {
+            ...i,
+            status,
+            ...(hasCommentUpdate ? { progressComment: trimmedComment || '' } : {})
+          };
+        })
+      };
+    });
   };
 
   // Cast / update vote for Star of Release (one vote per member per session)
@@ -1117,20 +1309,86 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Final retro score feedback details
+  const submitRetroFeedback = async (memberId: string, feedback: string) => {
+    if (!currentRetro || !memberId) return;
+
+    const normalizedFeedback = feedback.trim();
+    if (!normalizedFeedback) return;
+
+    const { data: sessionRow } = await supabase
+      .from('retro_sessions')
+      .select('retro_feedback')
+      .eq('id', currentRetro.id)
+      .maybeSingle();
+
+    const parsedFeedback = parseRetroFeedback(sessionRow?.retro_feedback);
+    const payload: RetroFeedbackPayload = {
+      facilitatorFeedback: parsedFeedback.facilitatorFeedback,
+      memberFeedback: {
+        ...parsedFeedback.memberFeedback,
+        [memberId]: normalizedFeedback
+      }
+    };
+
+    await supabase
+      .from('retro_sessions')
+      .update({ retro_feedback: serializeRetroFeedback(payload) })
+      .eq('id', currentRetro.id);
+
+    setCurrentRetro(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        memberRetroFeedback: {
+          ...prev.memberRetroFeedback,
+          [memberId]: normalizedFeedback
+        }
+      };
+    });
+  };
+
   const setRetroScore = async (score: number, feedback: string) => {
     if (!currentRetro) return;
+    const payload: RetroFeedbackPayload = {
+      facilitatorFeedback: feedback.trim(),
+      memberFeedback: currentRetro.memberRetroFeedback || {}
+    };
+
     await supabase.from('retro_sessions').update({
       retro_score: score,
-      retro_feedback: feedback
+      retro_feedback: serializeRetroFeedback(payload)
     }).eq('id', currentRetro.id);
+
+    setCurrentRetro(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        retroScore: score,
+        retroFeedback: payload.facilitatorFeedback
+      };
+    });
   };
 
   // Complete retro and close session status
   const completeRetro = async () => {
-    if (!currentRetro) return;
+    if (!currentRetro) return { ok: false, missingMemberIds: [] };
+
+    const retroTeam = teams.find(t => t.id === currentRetro.teamId);
+    if (!retroTeam) return { ok: false, missingMemberIds: [] };
+
+    const feedbackMap = currentRetro.memberRetroFeedback || {};
+    const missingMemberIds = retroTeam.members
+      .filter(member => !feedbackMap[member.id]?.trim())
+      .map(member => member.id);
+
+    if (missingMemberIds.length > 0) {
+      return { ok: false, missingMemberIds };
+    }
+
     await supabase.from('retro_sessions').update({ status: 'completed' }).eq('id', currentRetro.id);
     sessionStorage.removeItem('daki_retro_joined');
     setHasJoined(false);
+    return { ok: true, missingMemberIds: [] };
   };
 
   // Cancel and clear current active session
@@ -1206,6 +1464,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       deleteDakiCard,
       addActionItem,
       updatePrevActionItemStatus,
+      submitRetroFeedback,
       setRetroScore,
       completeRetro,
       cancelRetro,

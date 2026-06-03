@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { type DakiCard } from '../utils/mockData';
 import { playClick, playSuccess } from '../utils/sound';
 import { TrendingUp, ArrowLeft, ArrowRight, Calendar, PlusCircle, CheckCircle, FileText, ClipboardList } from 'lucide-react';
 
@@ -28,7 +29,7 @@ export const PrioritizePhase: React.FC = () => {
   const [actionAssignee, setActionAssignee] = useState(team.members[0]?.id || '');
   const [actionDate, setActionDate] = useState('');
 
-  const handleOpenActionForm = (card: any) => {
+  const handleOpenActionForm = (card: DakiCard) => {
     playClick();
     setActiveCardId(card.id);
     // Prefill description with card text

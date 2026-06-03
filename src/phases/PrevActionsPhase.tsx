@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { playClick } from '../utils/sound';
-import { ListChecks, ArrowLeft, ArrowRight, CheckCircle2, Clock, User, AlertCircle } from 'lucide-react';
+import { ListChecks, ArrowLeft, ArrowRight, CheckCircle2, Clock, User, AlertCircle, MessageSquare } from 'lucide-react';
 
 export const PrevActionsPhase: React.FC = () => {
   const { 
@@ -19,10 +19,16 @@ export const PrevActionsPhase: React.FC = () => {
 
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
 
   const handleStatusChange = (itemId: string, status: 'Open' | 'In Progress' | 'Resolved') => {
     playClick();
     updatePrevActionItemStatus(itemId, status);
+  };
+
+  const handleSaveComment = (itemId: string, status: 'Open' | 'In Progress' | 'Resolved') => {
+    playClick();
+    updatePrevActionItemStatus(itemId, status, commentDrafts[itemId] ?? '');
   };
 
   const getMemberDetails = (mId: string) => {
@@ -144,7 +150,7 @@ export const PrevActionsPhase: React.FC = () => {
                   key={item.id}
                   className="p-4 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:bg-slate-950/60 transition-all duration-200"
                 >
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 w-full">
                     <p className="text-sm font-semibold text-slate-100 mb-1.5 leading-relaxed">
                       {item.description}
                     </p>
@@ -163,6 +169,30 @@ export const PrevActionsPhase: React.FC = () => {
                       <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded">
                         {item.createdInRetro}
                       </span>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Progress Comment
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <textarea
+                          value={commentDrafts[item.id] ?? item.progressComment ?? ''}
+                          onChange={(e) => setCommentDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                          rows={2}
+                          placeholder="Add latest progress update, blocker, or next step..."
+                          className="form-input text-xs py-2 bg-slate-900 w-full resize-none"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0"
+                          onClick={() => handleSaveComment(item.id, item.status)}
+                        >
+                          Save Comment
+                        </Button>
+                      </div>
                     </div>
                   </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -20,7 +20,7 @@ export const AiAdoptionPhase: React.FC = () => {
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
-  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [draftRatings, setDraftRatings] = useState<Record<string, number> | null>(null);
   // reevaluating overrides submitted so user can edit again without clearing DB data
   const [reevaluating, setReevaluating] = useState(false);
 
@@ -29,23 +29,19 @@ export const AiAdoptionPhase: React.FC = () => {
   const isDbSubmitted = Object.keys(myDbScores).length > 0;
   const submitted = isDbSubmitted && !reevaluating;
 
-  // Sync range sliders with current user's database values (only affects slider display, not submitted state)
-  useEffect(() => {
-    if (currentRetro && currentUserMemberId) {
-      const myScores = currentRetro.aiAdoptionScores?.[currentUserMemberId] || {};
-      // Only update ratings from DB when not actively editing
-      if (!reevaluating) {
-        const initial: Record<string, number> = {};
-        AI_ADOPTION_QUESTIONS.forEach(question => {
-          initial[question.id] = myScores[question.id] !== undefined ? myScores[question.id] : 3;
-        });
-        setRatings(initial);
-      }
-    }
+  const dbRatings = useMemo(() => {
+    const myScores = currentRetro?.aiAdoptionScores?.[currentUserMemberId || ''] || {};
+    const initial: Record<string, number> = {};
+    AI_ADOPTION_QUESTIONS.forEach(question => {
+      initial[question.id] = myScores[question.id] !== undefined ? myScores[question.id] : 3;
+    });
+    return initial;
   }, [currentRetro?.aiAdoptionScores, currentUserMemberId]);
 
+  const ratings = reevaluating ? (draftRatings || dbRatings) : dbRatings;
+
   const handleSliderChange = (questionId: string, val: number) => {
-    setRatings(prev => ({ ...prev, [questionId]: val }));
+    setDraftRatings(prev => ({ ...(prev || dbRatings), [questionId]: val }));
   };
 
   const handleSubmit = () => {
@@ -55,6 +51,7 @@ export const AiAdoptionPhase: React.FC = () => {
       setAiAdoptionScore(currentUserMemberId, questionId, val);
     });
     setReevaluating(false); // submitted is now derived from DB, so just exit reevaluating mode
+    setDraftRatings(null);
     playSuccess();
   };
 
@@ -127,7 +124,7 @@ export const AiAdoptionPhase: React.FC = () => {
             </>
           )}
           {isDbSubmitted && !allSubmitted && (
-            <Button variant="outline" size="sm" onClick={() => { playClick(); setReevaluating(true); }} icon={<BrainCircuit className="w-4 h-4" />}>
+            <Button variant="outline" size="sm" onClick={() => { playClick(); setDraftRatings(dbRatings); setReevaluating(true); }} icon={<BrainCircuit className="w-4 h-4" />}>
               Re-evaluate
             </Button>
           )}

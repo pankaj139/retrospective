@@ -18,7 +18,10 @@ export const StarOfReleasePhase: React.FC = () => {
 
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
-  const votes = currentRetro?.starOfReleaseVotes || {};
+  const votes = useMemo(
+    () => currentRetro?.starOfReleaseVotes ?? {},
+    [currentRetro?.starOfReleaseVotes]
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const myVote = votes[currentUserMemberId] || null;

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -51,43 +51,20 @@ export const GamePhase: React.FC = () => {
   // Audio state
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Listen to multiplayer game start events from Supabase
-  useEffect(() => {
-    if (!currentRetro || currentRetro.gameStatus !== 'playing' || !currentRetro.gameStartedAt) {
-      setIsPlaying(false);
-      return;
+  const gameStatus = currentRetro?.gameStatus;
+  const gameStartedAt = currentRetro?.gameStartedAt;
+
+  const handleGameOver = useCallback(() => {
+    setIsPlaying(false);
+    if (soundEnabled) {
+      playBuzzer();
+      setTimeout(() => playScore(), 300);
     }
-
-    // Calculate remaining time based on start timestamp
-    const startMs = new Date(currentRetro.gameStartedAt).getTime();
-    const elapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
-    const remaining = 30 - elapsedSeconds;
-
-    if (remaining > 0) {
-      setIsPlaying(true);
-      setGameStartedOnce(true);
-      setTimeLeft(remaining);
-      setMyScore(0);
-
-      // Clear animation arrays
-      balloonsRef.current = [];
-      particlesRef.current = [];
-      scoresRef.current = [];
-
-      // Pre-populate some balloons
-      for (let i = 0; i < 6; i++) {
-        spawnBalloon(true);
-      }
-    } else {
-      setIsPlaying(false);
-      setGameStartedOnce(true);
-      setTimeLeft(0);
-    }
-  }, [currentRetro?.gameStatus, currentRetro?.gameStartedAt]);
+  }, [soundEnabled]);
 
   // Handle countdown
   useEffect(() => {
-    let timer: any;
+    let timer: ReturnType<typeof setInterval> | undefined;
     if (isPlaying && timeLeft > 0) {
       timer = setInterval(() => {
         setTimeLeft(prev => {
@@ -99,16 +76,10 @@ export const GamePhase: React.FC = () => {
         });
       }, 1000);
     }
-    return () => clearInterval(timer);
-  }, [isPlaying, timeLeft]);
-
-  const handleGameOver = () => {
-    setIsPlaying(false);
-    if (soundEnabled) {
-      playBuzzer();
-      setTimeout(() => playScore(), 300);
-    }
-  };
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isPlaying, timeLeft, handleGameOver]);
 
   const triggerGameStart = () => {
     playClick();
@@ -148,6 +119,46 @@ export const GamePhase: React.FC = () => {
       popped: false
     });
   };
+
+  // Listen to multiplayer game start events from Supabase
+  useEffect(() => {
+    const defer = (cb: () => void) => queueMicrotask(cb);
+
+    if (gameStatus !== 'playing' || !gameStartedAt) {
+      defer(() => setIsPlaying(false));
+      return;
+    }
+
+    // Calculate remaining time based on start timestamp
+    const startMs = new Date(gameStartedAt).getTime();
+    const elapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
+    const remaining = 30 - elapsedSeconds;
+
+    if (remaining > 0) {
+      defer(() => {
+        setIsPlaying(true);
+        setGameStartedOnce(true);
+        setTimeLeft(remaining);
+        setMyScore(0);
+      });
+
+      // Clear animation arrays
+      balloonsRef.current = [];
+      particlesRef.current = [];
+      scoresRef.current = [];
+
+      // Pre-populate some balloons
+      for (let i = 0; i < 6; i++) {
+        spawnBalloon(true);
+      }
+    } else {
+      defer(() => {
+        setIsPlaying(false);
+        setGameStartedOnce(true);
+        setTimeLeft(0);
+      });
+    }
+  }, [gameStatus, gameStartedAt]);
 
   const createPopParticles = (x: number, y: number, color: string) => {
     const count = 12 + Math.floor(Math.random() * 8);

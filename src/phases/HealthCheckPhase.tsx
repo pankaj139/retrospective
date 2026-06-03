@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -20,7 +20,7 @@ export const HealthCheckPhase: React.FC = () => {
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
-  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [draftRatings, setDraftRatings] = useState<Record<string, number> | null>(null);
   // reevaluating overrides submitted so user can edit again without clearing DB data
   const [reevaluating, setReevaluating] = useState(false);
 
@@ -29,23 +29,19 @@ export const HealthCheckPhase: React.FC = () => {
   const isDbSubmitted = Object.keys(myDbScores).length > 0;
   const submitted = isDbSubmitted && !reevaluating;
 
-  // Sync range sliders with current user's database values (only affects slider display, not submitted state)
-  useEffect(() => {
-    if (currentRetro && currentUserMemberId) {
-      const myScores = currentRetro.healthCheckScores[currentUserMemberId] || {};
-      // Only update ratings from DB when not actively editing
-      if (!reevaluating) {
-        const initial: Record<string, number> = {};
-        HEALTH_METRICS.forEach(metric => {
-          initial[metric.id] = myScores[metric.id] !== undefined ? myScores[metric.id] : 3;
-        });
-        setRatings(initial);
-      }
-    }
+  const dbRatings = useMemo(() => {
+    const myScores = currentRetro?.healthCheckScores[currentUserMemberId || ''] || {};
+    const initial: Record<string, number> = {};
+    HEALTH_METRICS.forEach(metric => {
+      initial[metric.id] = myScores[metric.id] !== undefined ? myScores[metric.id] : 3;
+    });
+    return initial;
   }, [currentRetro?.healthCheckScores, currentUserMemberId]);
 
+  const ratings = reevaluating ? (draftRatings || dbRatings) : dbRatings;
+
   const handleSliderChange = (metricId: string, val: number) => {
-    setRatings(prev => ({ ...prev, [metricId]: val }));
+    setDraftRatings(prev => ({ ...(prev || dbRatings), [metricId]: val }));
   };
 
   const handleSubmit = () => {
@@ -55,6 +51,7 @@ export const HealthCheckPhase: React.FC = () => {
       setHealthScore(currentUserMemberId, metricId, val);
     });
     setReevaluating(false); // submitted is now derived from DB, so just exit reevaluating mode
+    setDraftRatings(null);
     playSuccess();
   };
 
@@ -127,7 +124,7 @@ export const HealthCheckPhase: React.FC = () => {
             </>
           )}
           {isDbSubmitted && !allSubmitted && (
-            <Button variant="outline" size="sm" onClick={() => { playClick(); setReevaluating(true); }} icon={<Activity className="w-4 h-4" />}>
+            <Button variant="outline" size="sm" onClick={() => { playClick(); setDraftRatings(dbRatings); setReevaluating(true); }} icon={<Activity className="w-4 h-4" />}>
               Re-evaluate
             </Button>
           )}

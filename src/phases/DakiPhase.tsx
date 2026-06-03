@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { type DakiCard } from '../utils/mockData';
 import { playClick, playPop, playClock, playBuzzer } from '../utils/sound';
 import { 
   LayoutGrid, ArrowLeft, ArrowRight, ThumbsUp, Trash2, 
@@ -39,7 +40,7 @@ export const DakiPhase: React.FC = () => {
 
   // Countdown clock loop
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (timerRunning && timerSeconds > 0) {
       interval = setInterval(() => {
         setTimerSeconds(prev => {
@@ -56,7 +57,9 @@ export const DakiPhase: React.FC = () => {
         });
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [timerRunning, timerSeconds]);
 
   const handleTimerToggle = () => {
@@ -305,7 +308,7 @@ export const DakiPhase: React.FC = () => {
 
 // Sub-component for individual DAKI card
 interface DakiCardComponentProps {
-  card: any;
+  card: DakiCard;
   currentUserMemberId: string;
   onUpvote: (id: string) => void;
   onDelete: (id: string) => void;
