@@ -116,9 +116,14 @@ export const AiAdoptionPhase: React.FC = () => {
       return scores && Object.keys(scores).length > 0;
     })
   );
-  const totalMembers = team?.members.length || 0;
-  const submittedCount = submittedMemberIds.size;
-  const allSubmitted = totalMembers > 0 && team.members.every(m => submittedMemberIds.has(m.id));
+  const joinedMembers = team?.members.filter(m =>
+    m.id === currentUserMemberId ||
+    currentRetro?.gameScores[m.id] !== undefined ||
+    currentRetro?.aiAdoptionScores?.[m.id] !== undefined
+  ) || [];
+  const totalMembers = joinedMembers.length;
+  const submittedCount = joinedMembers.filter(m => submittedMemberIds.has(m.id)).length;
+  const allSubmitted = totalMembers > 0 && joinedMembers.every(m => submittedMemberIds.has(m.id));
 
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in">
@@ -249,7 +254,7 @@ export const AiAdoptionPhase: React.FC = () => {
               </div>
               
               <div className="w-full flex flex-col gap-2.5 max-h-[220px] overflow-y-auto pr-1">
-                {team.members.map(member => {
+                {joinedMembers.map(member => {
                   const hasSubmitted = submittedMemberIds.has(member.id);
                   const isMe = member.id === currentUserMemberId;
                   return (

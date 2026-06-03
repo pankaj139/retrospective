@@ -52,7 +52,12 @@ export const IcebreakerPhase: React.FC = () => {
   };
 
   const question = currentRetro?.icebreakerQuestion || 'What is your favorite coding snack or drink?';
-  const allAnswered = team.members.length > 0 && team.members.every(m => currentRetro?.icebreakerAnswers[m.id]);
+  const joinedMembers = team.members.filter(m =>
+    m.id === currentUserMemberId ||
+    currentRetro?.icebreakerAnswers[m.id] !== undefined ||
+    currentRetro?.gameScores[m.id] !== undefined
+  );
+  const allAnswered = joinedMembers.length > 0 && joinedMembers.every(m => currentRetro?.icebreakerAnswers[m.id]);
 
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in">
@@ -164,7 +169,13 @@ export const IcebreakerPhase: React.FC = () => {
           </h2>
 
           <div className="flex-grow flex flex-col gap-3 overflow-y-auto max-h-[360px] pr-1">
-            {team.members.map((member) => {
+            {team.members
+              .filter(member =>
+                member.id === currentUserMemberId ||
+                currentRetro?.icebreakerAnswers[member.id] !== undefined ||
+                currentRetro?.gameScores[member.id] !== undefined
+              )
+              .map((member) => {
               const answer = currentRetro?.icebreakerAnswers[member.id];
               const isMe = member.id === currentUserMemberId;
               

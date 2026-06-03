@@ -487,7 +487,12 @@ export const GamePhase: React.FC = () => {
             </h2>
             
             <div className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto pr-1">
-              {team.members.map((member) => {
+              {team.members
+                .filter(member =>
+                  member.id === currentUserMemberId ||
+                  currentRetro?.gameScores[member.id] !== undefined
+                )
+                .map((member) => {
                 const isMe = member.id === currentUserMemberId;
                 // Optimistic local update during play for active user, DB sync for others
                 const displayScore = isMe ? myScore : (currentRetro?.gameScores[member.id] || 0);

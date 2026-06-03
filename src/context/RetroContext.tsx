@@ -988,7 +988,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       member_id: memberId,
       metric_id: metricId,
       score
-    });
+    }, { onConflict: 'id' });
   };
 
   // AI adoption scores (upsert per member)
@@ -1001,7 +1001,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       member_id: memberId,
       question_id: questionId,
       score
-    });
+    }, { onConflict: 'id' });
   };
 
   // Add DAKI card
