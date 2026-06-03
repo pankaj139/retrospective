@@ -146,7 +146,7 @@ export const StarOfReleasePhase: React.FC = () => {
                           <Check className="w-3 h-3" /> Your pick
                         </span>
                       )}
-                      {memberVoteCount > 0 && (
+                      {allVoted && memberVoteCount > 0 && (
                         <span className="flex items-center gap-1 text-[11px] font-bold text-indigo-400">
                           <Star className="w-3 h-3 fill-current" /> {memberVoteCount}
                         </span>
