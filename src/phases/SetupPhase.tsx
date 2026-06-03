@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -170,7 +171,7 @@ export const SetupPhase: React.FC = () => {
       }
     };
 
-    return (
+    const modalContent = (
       <div 
         className="fixed inset-0 flex items-center justify-center z-50 p-4"
         style={{ background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
@@ -186,7 +187,7 @@ export const SetupPhase: React.FC = () => {
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="flex items-center justify-between border-b border-white/10 p-4">
             <div className="flex flex-col gap-1">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <History className="w-5 h-5 text-indigo-400" />
@@ -588,6 +589,8 @@ export const SetupPhase: React.FC = () => {
         </div>
       </div>
     );
+
+    return ReactDOM.createPortal(modalContent, document.body);
   };
 
   return (
