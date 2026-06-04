@@ -12,7 +12,7 @@ import { PrioritizePhase } from './phases/PrioritizePhase';
 import { StarOfReleasePhase } from './phases/StarOfReleasePhase';
 import { ScorePhase } from './phases/ScorePhase';
 import { playClick } from './utils/sound';
-import { LayoutGrid, XOctagon, LogOut, SkipForward, Moon, Sun } from 'lucide-react';
+import { LayoutGrid, XOctagon, LogOut, SkipForward, Moon, Sun, User } from 'lucide-react';
 import './App.css';
 
 type ThemeMode = 'dark' | 'light';
@@ -30,11 +30,18 @@ interface AppContentProps {
 }
 
 const AppContent: React.FC<AppContentProps> = ({ theme, onThemeChange }) => {
-  const { currentRetro, setPhase, nextPhase, teams, selectedTeamId, cancelRetro, leaveRetro, hasJoined, currentUserMemberId } = useRetro();
+  const { currentRetro, setPhase, nextPhase, teams, selectedTeamId, cancelRetro, leaveRetro, hasJoined, currentUserMemberId, authUser, signOutUser } = useRetro();
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
   const activeMember = team?.members.find(member => member.id === currentUserMemberId);
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
+
+  const handleSignOutClick = async () => {
+    playClick();
+    setShowProfileDropdown(false);
+    await signOutUser();
+  };
 
   const maxPhaseVisited = currentRetro && hasJoined ? currentRetro.phase : 1;
 
@@ -143,6 +150,61 @@ const AppContent: React.FC<AppContentProps> = ({ theme, onThemeChange }) => {
               Light
             </button>
           </div>
+
+          {authUser && (
+            <div className="profile-dropdown-container">
+              {showProfileDropdown && (
+                <div 
+                  className="profile-dropdown-backdrop" 
+                  onClick={() => setShowProfileDropdown(false)} 
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => { playClick(); setShowProfileDropdown(!showProfileDropdown); }}
+                className="profile-trigger-btn"
+                aria-haspopup="true"
+                aria-expanded={showProfileDropdown}
+              >
+                <span className="profile-trigger-avatar">
+                  {activeMember ? activeMember.emoji : (authUser.email ? authUser.email[0].toUpperCase() : <User className="w-3.5 h-3.5" />)}
+                </span>
+                <span className="truncate max-w-[100px]">
+                  {activeMember ? activeMember.name : (authUser.email ? authUser.email.split('@')[0] : 'Profile')}
+                </span>
+              </button>
+
+              {showProfileDropdown && (
+                <div className="profile-dropdown-menu">
+                  <div className="profile-dropdown-info">
+                    <div className="profile-dropdown-label">Signed In As</div>
+                    <div className="profile-dropdown-email" title={authUser.email || ''}>
+                      {authUser.email || 'Authenticated User'}
+                    </div>
+                  </div>
+
+                  {activeMember && (
+                    <div className="profile-dropdown-member">
+                      <span className="profile-dropdown-member-emoji">{activeMember.emoji}</span>
+                      <div className="profile-dropdown-member-details">
+                        <div className="profile-dropdown-member-name">{activeMember.name}</div>
+                        <div className="profile-dropdown-member-role">{activeMember.role || 'Member'}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleSignOutClick}
+                    className="profile-dropdown-action"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {currentRetro && hasJoined && (
             isFacilitator ? (

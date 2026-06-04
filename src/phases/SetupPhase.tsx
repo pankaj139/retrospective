@@ -6,7 +6,8 @@ import { Button } from '../components/Button';
 import {
   Users, Plus, Play, History, Calendar, CheckCircle,
   UserPlus, ShieldCheck,
-  X, Star, Heart, CheckSquare, Bot, Activity
+  X, Star, Heart, CheckSquare, Bot, Activity,
+  Mail, Lock, LayoutGrid
 } from 'lucide-react';
 import { playClick } from '../utils/sound';
 import { 
@@ -31,7 +32,6 @@ export const SetupPhase: React.FC = () => {
     authUser,
     signInWithPassword,
     signUpWithPassword,
-    signOutUser,
     joinRetro,
     scheduleRetro,
     startScheduledRetro,
@@ -221,72 +221,87 @@ export const SetupPhase: React.FC = () => {
     setAuthPassword('');
   };
 
-  const handleSignOut = async () => {
-    playClick();
-    await signOutUser();
-    setAuthNotice('Signed out.');
-    setAuthError('');
-  };
-
   if (!isAuthenticated) {
     return (
-      <div className="w-full max-w-2xl mx-auto animate-fade-in">
-        <Card variant="default" padding="md">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-100">Authentication</h3>
-              <p className="text-[11px] text-slate-400">Sign in to access teams and retrospectives.</p>
+      <div className="auth-container">
+        <div className="auth-card">
+          <div>
+            <div className="auth-logo-badge">
+              <LayoutGrid className="w-6 h-6 text-white" />
             </div>
+            <h2 className="auth-header-title">Welcome to DAKI Retro Hub</h2>
+            <p className="auth-header-desc">Sign in or create an account to start your collaborative retrospectives.</p>
           </div>
 
-          <form onSubmit={handleAuthSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              type="email"
-              placeholder="Email"
-              value={authEmail}
-              onChange={e => setAuthEmail(e.target.value)}
-              className="form-input"
-              required
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={authPassword}
-              onChange={e => setAuthPassword(e.target.value)}
-              className="form-input"
-              required
-              minLength={6}
-            />
-            <div className="sm:col-span-2 flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={authMode === 'sign-in' ? 'primary' : 'outline'}
-                onClick={() => { playClick(); setAuthMode('sign-in'); }}
-              >
-                Sign In
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={authMode === 'sign-up' ? 'primary' : 'outline'}
-                onClick={() => { playClick(); setAuthMode('sign-up'); }}
-              >
-                Sign Up
-              </Button>
-              <Button type="submit" size="sm" variant="success" className="ml-auto">
-                {authMode === 'sign-in' ? 'Continue' : 'Create Account'}
-              </Button>
+          <div className="auth-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={authMode === 'sign-in'}
+              onClick={() => { playClick(); setAuthMode('sign-in'); }}
+              className={`auth-tab-btn ${authMode === 'sign-in' ? 'active' : ''}`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={authMode === 'sign-up'}
+              onClick={() => { playClick(); setAuthMode('sign-up'); }}
+              className={`auth-tab-btn ${authMode === 'sign-up' ? 'active' : ''}`}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          <form onSubmit={handleAuthSubmit} className="auth-form">
+            <div className="auth-input-group">
+              <label className="auth-input-label">Email Address</label>
+              <div className="auth-input-wrapper">
+                <Mail className="auth-input-icon w-4 h-4" />
+                <input
+                  type="email"
+                  placeholder="name@company.com"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  className="auth-input-field"
+                  required
+                />
+              </div>
             </div>
+
+            <div className="auth-input-group">
+              <label className="auth-input-label">Password</label>
+              <div className="auth-input-wrapper">
+                <Lock className="auth-input-icon w-4 h-4" />
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={authPassword}
+                  onChange={e => setAuthPassword(e.target.value)}
+                  className="auth-input-field"
+                  required
+                  minLength={6}
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="auth-submit-btn">
+              {authMode === 'sign-in' ? 'Continue' : 'Create Account'}
+            </button>
           </form>
 
           {authError && (
-            <p className="text-[11px] text-rose-400 mt-2">{authError}</p>
+            <div className="auth-alert-error">
+              {authError}
+            </div>
           )}
           {authNotice && (
-            <p className="text-[11px] text-slate-300 mt-2">{authNotice}</p>
+            <div className="auth-alert-notice">
+              {authNotice}
+            </div>
           )}
-        </Card>
+        </div>
       </div>
     );
   }
@@ -878,77 +893,8 @@ export const SetupPhase: React.FC = () => {
       {/* Left Columns - Setup card */}
       <div className="md:col-span-2 flex flex-col gap-6">
 
-        <Card variant="default" padding="md">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-100">Authentication</h3>
-              <p className="text-[11px] text-slate-400">Sign in to request team access and manage approvals.</p>
-            </div>
-            {isAuthenticated && (
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                Sign Out
-              </Button>
-            )}
-          </div>
-
-          {isAuthenticated ? (
-            <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-              Signed in as {authUser?.email || 'authenticated user'}
-            </div>
-          ) : (
-            <form onSubmit={handleAuthSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="email"
-                placeholder="Email"
-                value={authEmail}
-                onChange={e => setAuthEmail(e.target.value)}
-                className="form-input"
-                required
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={authPassword}
-                onChange={e => setAuthPassword(e.target.value)}
-                className="form-input"
-                required
-                minLength={6}
-              />
-              <div className="sm:col-span-2 flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={authMode === 'sign-in' ? 'primary' : 'outline'}
-                  onClick={() => { playClick(); setAuthMode('sign-in'); }}
-                >
-                  Sign In
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={authMode === 'sign-up' ? 'primary' : 'outline'}
-                  onClick={() => { playClick(); setAuthMode('sign-up'); }}
-                >
-                  Sign Up
-                </Button>
-                <Button type="submit" size="sm" variant="success" className="ml-auto">
-                  {authMode === 'sign-in' ? 'Continue' : 'Create Account'}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          {authError && (
-            <p className="text-[11px] text-rose-400 mt-2">{authError}</p>
-          )}
-          {authNotice && (
-            <p className="text-[11px] text-slate-300 mt-2">{authNotice}</p>
-          )}
-        </Card>
-        
         {/* Team setup & selector */}
-        {isAuthenticated && (
-          <Card variant="brand" padding="lg">
+        <Card variant="brand" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <div className="flex flex-col gap-1">
                 <h2 className="text-xl font-bold flex items-center gap-2.5">
@@ -1369,7 +1315,6 @@ export const SetupPhase: React.FC = () => {
               </div>
             )}
           </Card>
-        )}
 
       </div>
 
