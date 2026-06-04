@@ -72,6 +72,10 @@ const AppContent: React.FC<AppContentProps> = ({ theme, onThemeChange }) => {
   const renderActivePhase = () => {
     if (!currentRetro || !hasJoined) return <SetupPhase />;
 
+    if (currentRetro.status === 'scheduled') {
+      return <DakiPhase />;
+    }
+
     switch (currentRetro.phase) {
       case 1:
         return <GamePhase />;
@@ -106,12 +110,14 @@ const AppContent: React.FC<AppContentProps> = ({ theme, onThemeChange }) => {
           </div>
           <div>
             <h1 className="text-sm font-extrabold tracking-wider text-slate-100 uppercase flex items-center gap-1.5">
-              DAKI Retro Hub
+              {currentRetro?.retroName || 'DAKI Retro Hub'}
             </h1>
             <p className="text-[10px] text-slate-400 font-medium">
               {(!currentRetro || !hasJoined)
                 ? 'Team Setup & History'
-                : `Active Session • ${team?.name}${activeMember ? ` • ${activeMember.emoji} ${activeMember.name}` : ''}`}
+                : currentRetro.status === 'scheduled'
+                  ? `Pre-Retro Prep • ${team?.name}${activeMember ? ` • ${activeMember.emoji} ${activeMember.name}` : ''}`
+                  : `Active Session • ${team?.name}${activeMember ? ` • ${activeMember.emoji} ${activeMember.name}` : ''}`}
             </p>
           </div>
         </div>
@@ -161,7 +167,7 @@ const AppContent: React.FC<AppContentProps> = ({ theme, onThemeChange }) => {
       </header>
 
       {/* Stepper indicators if inside active retro */}
-      {currentRetro && hasJoined && (
+      {currentRetro && hasJoined && currentRetro.status !== 'scheduled' && (
         <div style={{ position: 'sticky', top: '65px', zIndex: 30 }}>
           <Stepper
             currentPhase={currentRetro.phase}

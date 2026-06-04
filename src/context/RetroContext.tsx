@@ -22,7 +22,7 @@ interface RetroContextType {
   setCurrentUserMemberId: (id: string) => void;
   selectTeam: (teamId: string) => void;
   createTeam: (name: string, members: Omit<TeamMember, 'id'>[]) => Promise<Team | null>;
-  startRetro: () => Promise<void>;
+  startRetro: (retroName?: string) => Promise<void>;
   nextPhase: () => void;
   prevPhase: () => void;
   setPhase: (phase: number) => void;
@@ -52,6 +52,8 @@ interface RetroContextType {
   signUpWithPassword: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signOutUser: () => Promise<void>;
 
+  scheduleRetro: (date: string, retroName?: string, jiraLink?: string) => Promise<RetroSession | null>;
+  startScheduledRetro: () => Promise<void>;
   hasJoined: boolean;
   joinRetro: () => void;
   isUsingMockData: boolean;
@@ -183,6 +185,8 @@ type RetroFeedbackPayload = {
   facilitatorFeedback: string;
   memberFeedback: Record<string, string>;
   joinedMemberIds: string[];
+  retroName?: string;
+  jiraLink?: string;
 };
 
 const getDefaultRetroFeedbackPayload = (): RetroFeedbackPayload => ({
@@ -223,7 +227,9 @@ const parseRetroFeedback = (rawFeedback: unknown): RetroFeedbackPayload => {
     return {
       facilitatorFeedback: typeof parsedObject.facilitatorFeedback === 'string' ? parsedObject.facilitatorFeedback : '',
       memberFeedback: normalizeMemberFeedback(parsedObject.memberFeedback),
-      joinedMemberIds: normalizeJoinedMemberIds(parsedObject.joinedMemberIds)
+      joinedMemberIds: normalizeJoinedMemberIds(parsedObject.joinedMemberIds),
+      retroName: typeof parsedObject.retroName === 'string' ? parsedObject.retroName : undefined,
+      jiraLink: typeof parsedObject.jiraLink === 'string' ? parsedObject.jiraLink : undefined
     };
   }
 
@@ -238,7 +244,9 @@ const parseRetroFeedback = (rawFeedback: unknown): RetroFeedbackPayload => {
       return {
         facilitatorFeedback: typeof parsed.facilitatorFeedback === 'string' ? parsed.facilitatorFeedback : '',
         memberFeedback: normalizeMemberFeedback(parsed.memberFeedback),
-        joinedMemberIds: normalizeJoinedMemberIds(parsed.joinedMemberIds)
+        joinedMemberIds: normalizeJoinedMemberIds(parsed.joinedMemberIds),
+        retroName: typeof parsed.retroName === 'string' ? parsed.retroName : undefined,
+        jiraLink: typeof parsed.jiraLink === 'string' ? parsed.jiraLink : undefined
       };
     }
   } catch {
@@ -256,7 +264,9 @@ const serializeRetroFeedback = (payload: RetroFeedbackPayload): string => {
   return JSON.stringify({
     facilitatorFeedback: payload.facilitatorFeedback,
     memberFeedback: payload.memberFeedback,
-    joinedMemberIds: payload.joinedMemberIds
+    joinedMemberIds: payload.joinedMemberIds,
+    retroName: payload.retroName,
+    jiraLink: payload.jiraLink
   });
 };
 
@@ -470,7 +480,10 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               retroScore: s.retro_score,
               retroFeedback: parsedFeedback.facilitatorFeedback,
               memberRetroFeedback: parsedFeedback.memberFeedback,
-              joinedMemberIds: parsedFeedback.joinedMemberIds
+              joinedMemberIds: parsedFeedback.joinedMemberIds,
+              status: s.status,
+              retroName: parsedFeedback.retroName,
+              jiraLink: parsedFeedback.jiraLink
             };
           })
         );
@@ -619,16 +632,40 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setPreviousActionItems([]);
       }
 
-      // Check for active session
-      const { data: activeSessions } = await supabase
-        .from('retro_sessions')
-        .select('*')
-        .eq('team_id', selectedTeamId)
-        .eq('status', 'active')
-        .limit(1);
+      // Check for query parameter session first
+      const urlParams = new URLSearchParams(window.location.search);
+      const querySessionId = urlParams.get('sessionId');
+      
+      let s = null;
+      if (querySessionId) {
+        const { data: querySessions } = await supabase
+          .from('retro_sessions')
+          .select('*')
+          .eq('id', querySessionId)
+          .limit(1);
+        if (querySessions && querySessions.length > 0) {
+          s = querySessions[0];
+          // If session belongs to a different team, auto select it
+          if (s.team_id && s.team_id !== selectedTeamId) {
+            setSelectedTeamId(s.team_id);
+          }
+        }
+      }
+      
+      if (!s) {
+        // Check for active session for selected team
+        const { data: activeSessions } = await supabase
+          .from('retro_sessions')
+          .select('*')
+          .eq('team_id', selectedTeamId)
+          .eq('status', 'active')
+          .limit(1);
+        if (activeSessions && activeSessions.length > 0) {
+          s = activeSessions[0];
+        }
+      }
 
-      if (activeSessions && activeSessions.length > 0) {
-        const s = activeSessions[0];
+      if (s) {
         const parsedFeedback = parseRetroFeedback(s.retro_feedback);
         
         // Fetch session components
@@ -672,6 +709,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           teamId: s.team_id,
           date: s.date,
           phase: s.phase,
+          status: s.status,
           gameScores,
           icebreakerAnswers,
           healthCheckScores,
@@ -682,6 +720,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           retroFeedback: parsedFeedback.facilitatorFeedback,
           memberRetroFeedback: parsedFeedback.memberFeedback,
           joinedMemberIds: parsedFeedback.joinedMemberIds,
+          retroName: parsedFeedback.retroName,
+          jiraLink: parsedFeedback.jiraLink,
           gameStatus: s.game_status,
           gameStartedAt: s.game_started_at,
           icebreakerQuestion: s.icebreaker_question,
@@ -827,6 +867,9 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 teamId: s.team_id,
                 date: s.date,
                 phase: s.phase,
+                status: s.status,
+                retroName: parsedFeedback.retroName,
+                jiraLink: parsedFeedback.jiraLink,
                 gameScores,
                 icebreakerAnswers,
                 healthCheckScores,
@@ -851,14 +894,17 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               setHasJoined(false);
               setCurrentRetro(null);
               window.location.reload();
-            } else if (s.status === 'active') {
+            } else if (s.status === 'active' || s.status === 'scheduled') {
               const parsedFeedback = parseRetroFeedback(s.retro_feedback);
-              console.log('[RetroHub] Session phase updated to:', s.phase);
+              console.log('[RetroHub] Session updated:', s.phase, s.status);
               setCurrentRetro(prev => {
                 if (prev && prev.id === s.id) {
                   return {
                     ...prev,
                     phase: s.phase,
+                    status: s.status,
+                    retroName: parsedFeedback.retroName,
+                    jiraLink: parsedFeedback.jiraLink,
                     retroScore: s.retro_score,
                     retroFeedback: parsedFeedback.facilitatorFeedback,
                     memberRetroFeedback: parsedFeedback.memberFeedback,
@@ -1337,7 +1383,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Start new retro session
-  const startRetro = async () => {
+  const startRetro = async (retroName?: string) => {
     if (!isAuthorizedApprovedMember(selectedTeamId, currentUserMemberId)) {
       console.warn('[RetroHub] Start blocked: current user is not an approved team member.');
       return;
@@ -1351,7 +1397,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const initialFeedbackPayload = serializeRetroFeedback({
       facilitatorFeedback: '',
       memberFeedback: {},
-      joinedMemberIds: initialJoinedMemberIds
+      joinedMemberIds: initialJoinedMemberIds,
+      retroName: retroName || undefined
     });
 
     const { error } = await supabase.from('retro_sessions').insert({
@@ -1386,8 +1433,89 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         gameStatus: 'not_started',
         icebreakerQuestion: initialQuestion,
         createdBy: currentUserMemberId,
-        starOfReleaseVotes: {}
+        starOfReleaseVotes: {},
+        retroName: retroName || undefined
       });
+    }
+  };
+
+  const scheduleRetro = async (date: string, retroName?: string, jiraLink?: string) => {
+    if (!isAuthorizedApprovedMember(selectedTeamId, currentUserMemberId)) {
+      console.warn('[RetroHub] Schedule blocked: current user is not an approved team member.');
+      return null;
+    }
+
+    const retroId = `retro-${Date.now()}`;
+    const team = teams.find(t => t.id === selectedTeamId) || teams[0];
+    const initialQuestion = ICEBREAKER_QUESTIONS[Math.floor(Math.random() * ICEBREAKER_QUESTIONS.length)];
+    const initialFeedbackPayload = serializeRetroFeedback({
+      facilitatorFeedback: '',
+      memberFeedback: {},
+      joinedMemberIds: [],
+      retroName: retroName || undefined,
+      jiraLink: jiraLink || undefined
+    });
+
+    const { error } = await supabase.from('retro_sessions').insert({
+      id: retroId,
+      team_id: team.id,
+      date: date,
+      phase: 6,
+      status: 'scheduled',
+      icebreaker_question: initialQuestion,
+      created_by: currentUserMemberId,
+      retro_feedback: initialFeedbackPayload
+    });
+
+    if (!error) {
+      const scheduledSession: RetroSession = {
+        id: retroId,
+        teamId: team.id,
+        date: date,
+        phase: 6,
+        status: 'scheduled',
+        retroName: retroName || undefined,
+        jiraLink: jiraLink || undefined,
+        gameScores: {},
+        icebreakerAnswers: {},
+        healthCheckScores: {},
+        aiAdoptionScores: {},
+        dakiCards: [],
+        actionItems: [],
+        retroScore: 5,
+        retroFeedback: '',
+        memberRetroFeedback: {},
+        joinedMemberIds: [],
+        gameStatus: 'not_started',
+        icebreakerQuestion: initialQuestion,
+        createdBy: currentUserMemberId,
+        starOfReleaseVotes: {}
+      };
+      
+      setCurrentRetro(scheduledSession);
+      return scheduledSession;
+    }
+    console.error('[RetroHub] Failed to schedule retrospective:', error);
+    return null;
+  };
+
+  const startScheduledRetro = async () => {
+    if (!currentRetro) return;
+    const { error } = await supabase
+      .from('retro_sessions')
+      .update({ status: 'active', phase: 1 })
+      .eq('id', currentRetro.id);
+    if (!error) {
+      setCurrentRetro(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          status: 'active',
+          phase: 1
+        };
+      });
+      sessionStorage.setItem('daki_retro_joined', 'true');
+      setHasJoined(true);
     }
   };
 
@@ -1407,7 +1535,9 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const payload: RetroFeedbackPayload = {
         facilitatorFeedback: currentRetro.retroFeedback || '',
         memberFeedback: currentRetro.memberRetroFeedback || {},
-        joinedMemberIds: nextJoinedMemberIds
+        joinedMemberIds: nextJoinedMemberIds,
+        retroName: currentRetro.retroName,
+        jiraLink: currentRetro.jiraLink
       };
 
       void supabase
@@ -1727,7 +1857,9 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ...parsedFeedback.memberFeedback,
         [memberId]: normalizedFeedback
       },
-      joinedMemberIds: Array.from(new Set([...(parsedFeedback.joinedMemberIds || []), memberId]))
+      joinedMemberIds: Array.from(new Set([...(parsedFeedback.joinedMemberIds || []), memberId])),
+      retroName: parsedFeedback.retroName,
+      jiraLink: parsedFeedback.jiraLink
     };
 
     await supabase
@@ -1753,7 +1885,9 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const payload: RetroFeedbackPayload = {
       facilitatorFeedback: feedback.trim(),
       memberFeedback: currentRetro.memberRetroFeedback || {},
-      joinedMemberIds: currentRetro.joinedMemberIds || []
+      joinedMemberIds: currentRetro.joinedMemberIds || [],
+      retroName: currentRetro.retroName,
+      jiraLink: currentRetro.jiraLink
     };
 
     await supabase.from('retro_sessions').update({
@@ -1861,6 +1995,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       selectTeam,
       createTeam,
       startRetro,
+      scheduleRetro,
+      startScheduledRetro,
       nextPhase,
       prevPhase,
       setPhase,

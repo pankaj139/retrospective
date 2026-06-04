@@ -21,10 +21,17 @@ export const DakiPhase: React.FC = () => {
     deleteDakiCard, 
     nextPhase, 
     prevPhase,
-    currentUserMemberId
+    currentUserMemberId,
+    startScheduledRetro,
+    authUser
   } = useRetro();
 
   const team = teams.find(t => t.id === selectedTeamId) || teams[0];
+  const isTeamOwner = Boolean(
+    team && authUser && (
+      team.ownerUserId === authUser.id || team.ownerMemberId === currentUserMemberId
+    )
+  );
   const isFacilitator = !currentRetro?.createdBy || currentRetro.createdBy === currentUserMemberId;
 
   // Card creator form state
@@ -115,6 +122,44 @@ export const DakiPhase: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-6 animate-fade-in px-4">
+      {currentRetro?.status === 'scheduled' && (
+        <div className="bg-gradient-to-r from-indigo-900/60 to-cyan-900/60 border border-indigo-500/30 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl shadow-indigo-950/20 backdrop-blur-md">
+          <div className="flex-1">
+            <h3 className="text-sm font-extrabold tracking-wider text-indigo-300 uppercase mb-1">Pre-Retro Prep Mode</h3>
+            <p className="text-xs text-slate-300">
+              Your team is currently prepping for the retro: <span className="font-bold text-slate-100">{currentRetro.retroName || 'Upcoming Retrospective'}</span>.
+              Members can fill out and refine their DAKI cards in advance.
+            </p>
+            {currentRetro.jiraLink && (
+              <div className="mt-2 text-xs flex items-center gap-1.5">
+                <span className="text-slate-400">Jira Board/Tickets:</span>
+                <a
+                  href={currentRetro.jiraLink.startsWith('http') ? currentRetro.jiraLink : `https://${currentRetro.jiraLink}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold underline"
+                >
+                  {currentRetro.jiraLink} ↗
+                </a>
+              </div>
+            )}
+          </div>
+          {isTeamOwner && (
+            <Button
+              variant="success"
+              onClick={async () => {
+                playClick();
+                await startScheduledRetro();
+              }}
+              icon={<Play className="w-4 h-4 fill-current" />}
+              glow
+            >
+              Start Session Now
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/5 pb-4">
         <div>
           <h1 className="title-large flex items-center gap-3">
@@ -140,7 +185,11 @@ export const DakiPhase: React.FC = () => {
             </button>
           </div>
 
-          {isFacilitator ? (
+          {currentRetro?.status === 'scheduled' ? (
+            <span className="text-xs text-indigo-400 italic bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-lg font-semibold">
+              Prep Mode Active
+            </span>
+          ) : isFacilitator ? (
             <>
               <Button variant="outline" size="sm" onClick={prevPhase} icon={<ArrowLeft className="w-4 h-4" />}>
                 Back

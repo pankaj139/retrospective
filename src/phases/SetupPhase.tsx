@@ -33,11 +33,19 @@ export const SetupPhase: React.FC = () => {
     signUpWithPassword,
     signOutUser,
     joinRetro,
+    scheduleRetro,
+    startScheduledRetro,
+    currentUserMemberId,
     loading
   } = useRetro();
 
   const [selectedHistoryRetro, setSelectedHistoryRetro] = useState<RetroSession | null>(null);
   const [modalTab, setModalTab] = useState<'overview' | 'daki' | 'actions'>('overview');
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleName, setScheduleName] = useState('');
+  const [scheduleJira, setScheduleJira] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
 
   
   // Team creation states
@@ -79,6 +87,11 @@ export const SetupPhase: React.FC = () => {
   );
   const isAuthenticated = Boolean(authUser);
   const teamHistory = history.filter(h => h.teamId === selectedTeamId);
+  const isTeamOwner = Boolean(
+    activeTeam && authUser && (
+      activeTeam.ownerUserId === authUser.id || activeTeam.ownerMemberId === currentUserMemberId
+    )
+  );
 
   if (loading) {
     return (
@@ -90,13 +103,34 @@ export const SetupPhase: React.FC = () => {
   }
 
   const handleStart = () => {
+    const defaultName = `${activeTeam?.name || 'Team'} Retro - ${new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+    const nameInput = window.prompt("Enter a name for this retrospective session:", defaultName);
+    if (nameInput === null) return; // user cancelled starting retro
     playClick();
-    startRetro();
+    startRetro(nameInput.trim() || undefined);
   };
 
   const handleJoin = () => {
     playClick();
     joinRetro();
+  };
+
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleDate) return;
+    playClick();
+    const formattedDate = new Date(scheduleDate).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    await scheduleRetro(formattedDate, scheduleName.trim() || undefined, scheduleJira.trim() || undefined);
+    setShowScheduleModal(false);
+    setScheduleDate('');
+    setScheduleName('');
+    setScheduleJira('');
   };
 
   const handleAddMemberField = () => {
@@ -750,6 +784,94 @@ export const SetupPhase: React.FC = () => {
     return ReactDOM.createPortal(modalContent, document.body);
   };
 
+  const renderScheduleModal = () => {
+    const modalContent = (
+      <div 
+        className="fixed inset-0 flex items-center justify-center z-50 p-4"
+        style={{ background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+        onClick={() => setShowScheduleModal(false)}
+      >
+        <div 
+          className="rounded-2xl w-full max-w-md p-6 flex flex-col gap-4 bg-slate-900 border border-white/10"
+          style={{
+            background: 'linear-gradient(145deg, #0f1523 0%, #0a0e1a 100%)',
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 25px 80px rgba(0,0,0,0.8), 0 0 60px rgba(99,102,241,0.08)'
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-indigo-400" />
+              Schedule Retrospective
+            </h3>
+            <button 
+              onClick={() => setShowScheduleModal(false)}
+              className="text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleScheduleSubmit} className="flex flex-col gap-4 text-xs">
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Retro Name / Topic</label>
+              <input
+                type="text"
+                placeholder="e.g. Summer Major Release Retro"
+                required
+                value={scheduleName}
+                onChange={e => setScheduleName(e.target.value)}
+                className="form-input"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Jira Link (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. jira.company.com/issues/?filter=summer-release"
+                value={scheduleJira}
+                onChange={e => setScheduleJira(e.target.value)}
+                className="form-input"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Scheduled Date & Time</label>
+              <input
+                type="datetime-local"
+                required
+                value={scheduleDate}
+                onChange={e => setScheduleDate(e.target.value)}
+                className="form-input"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 mt-2 pt-3 border-t border-white/5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowScheduleModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+              >
+                Schedule Session
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+
+    return ReactDOM.createPortal(modalContent, document.body);
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 animate-fade-in">
 
@@ -1130,22 +1252,117 @@ export const SetupPhase: React.FC = () => {
 
                   {hasApprovedAccess && (
                     currentRetro ? (
-                      <Button
-                        variant="success"
-                        onClick={handleJoin}
-                        icon={<Play className="w-4 h-4 fill-current" />}
-                        glow
-                      >
-                        Join Active Retrospective
-                      </Button>
+                      currentRetro.status === 'scheduled' ? (
+                        <div className="flex flex-col gap-4 w-full bg-slate-950/40 p-4 border border-white/5 rounded-xl text-left">
+                          <div className="flex items-center gap-3">
+                            <Calendar className="w-5 h-5 text-indigo-400 animate-pulse shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-100 truncate">
+                                {currentRetro.retroName || 'Upcoming Retrospective'}
+                              </p>
+                              <p className="text-[10px] text-slate-400">{currentRetro.date}</p>
+                            </div>
+                          </div>
+
+                          {currentRetro.jiraLink && (
+                            <div className="text-[11px] bg-slate-900/60 p-2 rounded-lg border border-white/5 flex items-center justify-between">
+                              <span className="text-slate-400 truncate">Tickets / Jira Board:</span>
+                              <a
+                                href={currentRetro.jiraLink.startsWith('http') ? currentRetro.jiraLink : `https://${currentRetro.jiraLink}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-400 hover:text-indigo-300 font-semibold hover:underline shrink-0"
+                              >
+                                View Jira Board ↗
+                              </a>
+                            </div>
+                          )}
+                          
+                          {/* Share Link */}
+                          <div className="flex flex-col gap-1.5 border-t border-white/5 pt-3">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Share Link with Team</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                readOnly
+                                value={`${window.location.origin}/?sessionId=${currentRetro.id}`}
+                                className="form-input text-xs py-1.5 bg-slate-950/80 border-white/5 select-all"
+                                onClick={e => (e.target as HTMLInputElement).select()}
+                              />
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="py-1 px-3"
+                                onClick={() => {
+                                  playClick();
+                                  navigator.clipboard.writeText(`${window.location.origin}/?sessionId=${currentRetro.id}`);
+                                  setCopiedLink(true);
+                                  setTimeout(() => setCopiedLink(false), 2000);
+                                }}
+                              >
+                                {copiedLink ? 'Copied!' : 'Copy Link'}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 justify-end mt-2 pt-3 border-t border-white/5">
+                            {isTeamOwner && (
+                              <Button
+                                variant="success"
+                                size="sm"
+                                onClick={async () => {
+                                  playClick();
+                                  await startScheduledRetro();
+                                }}
+                                icon={<Play className="w-4 h-4 fill-current" />}
+                                glow
+                              >
+                                Start Session Now
+                              </Button>
+                            )}
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={handleJoin}
+                              icon={<Play className="w-4 h-4 fill-current" />}
+                            >
+                              Join Prep & Fill DAKI
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="success"
+                          onClick={handleJoin}
+                          icon={<Play className="w-4 h-4 fill-current" />}
+                          glow
+                        >
+                          Join Active Retrospective
+                        </Button>
+                      )
                     ) : (
-                      <Button
-                        variant="primary"
-                        onClick={handleStart}
-                        icon={<Play className="w-4 h-4 fill-current" />}
-                      >
-                        Start Retrospective
-                      </Button>
+                      isTeamOwner ? (
+                        <div className="flex gap-3">
+                          <Button
+                            variant="primary"
+                            onClick={handleStart}
+                            icon={<Play className="w-4 h-4 fill-current" />}
+                          >
+                            Start Retrospective
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => { playClick(); setShowScheduleModal(true); }}
+                            icon={<Calendar className="w-4 h-4" />}
+                          >
+                            Schedule Retro
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic font-semibold">
+                          Waiting for Team Owner to start or schedule a retrospective.
+                        </p>
+                      )
                     )
                   )}
                 </div>
@@ -1181,8 +1398,8 @@ export const SetupPhase: React.FC = () => {
                  >
 
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
-                      Retro Archive
+                    <span className="text-xs font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full truncate max-w-[200px]" title={session.retroName || 'Retro Archive'}>
+                      {session.retroName || 'Retro Archive'}
                     </span>
                     <span className="text-[11px] text-slate-400 flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
@@ -1218,6 +1435,7 @@ export const SetupPhase: React.FC = () => {
       </div>
       )}
       {renderHistoryDetailModal()}
+      {showScheduleModal && renderScheduleModal()}
     </div>
   );
 };

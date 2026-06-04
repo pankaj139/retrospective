@@ -506,6 +506,7 @@
 .min-w-0 { min-width: 0px; }
 .min-w-\[700px\] { min-width: 700px; }
 .max-w-xs { max-width: 20rem; }
+.max-w-md { max-width: 28rem; }
 .max-w-xl { max-width: 36rem; }
 .max-w-5xl { max-width: 64rem; }
 .max-w-6xl { max-width: 72rem; }
@@ -553,6 +554,7 @@
 .p-3\.5 { padding: 0.875rem; }
 .p-4 { padding: 1rem; }
 .p-5 { padding: 1.25rem; }
+.p-6 { padding: 1.5rem; }
 .p-8 { padding: 2rem; }
 .pr-1 { padding-right: 0.25rem; }
 .pr-10 { padding-right: 2.5rem; }

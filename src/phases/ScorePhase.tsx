@@ -3,7 +3,8 @@ import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { playClick, playSuccess } from '../utils/sound';
-import { Award, ArrowLeft, Trophy, Activity, LayoutGrid, FileText, CheckCircle, Star } from 'lucide-react';
+import { Award, ArrowLeft, Trophy, Activity, LayoutGrid, FileText, CheckCircle, Star, Share2, Copy, Download, X } from 'lucide-react';
+import { HEALTH_METRICS, AI_ADOPTION_QUESTIONS } from '../utils/mockData';
 
 export const ScorePhase: React.FC = () => {
   const {
@@ -24,6 +25,11 @@ export const ScorePhase: React.FC = () => {
   const [facilitatorFeedbackDraft, setFacilitatorFeedbackDraft] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [archiveError, setArchiveError] = useState('');
+  
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'markdown' | 'json'>('markdown');
+  const [copied, setCopied] = useState(false);
+  const [copiedRichText, setCopiedRichText] = useState(false);
 
   const feedbackMap = useMemo(() => currentRetro?.memberRetroFeedback ?? {}, [currentRetro?.memberRetroFeedback]);
   const joinedMemberIds = useMemo(
@@ -106,6 +112,695 @@ export const ScorePhase: React.FC = () => {
 
   const winner = getGameWinner();
 
+  const formatRetroDate = (dateValue?: string) => {
+    if (!dateValue) return 'N/A';
+    const parsedDate = new Date(dateValue);
+    return Number.isNaN(parsedDate.getTime()) ? 'N/A' : parsedDate.toLocaleDateString();
+  };
+
+  const generateMarkdownExport = () => {
+    if (!currentRetro) return '';
+    
+    // 1. Team & General Info
+    let md = `# ${currentRetro.retroName || 'DAKI Retrospective Session Summary'}\n`;
+    md += `- **Date**: ${formatRetroDate(currentRetro.date)}\n`;
+    md += `- **Team**: ${team?.name || 'Unknown Team'}\n`;
+    md += `- **Session ID**: ${currentRetro.id}\n`;
+    const joinedNames = (currentRetro.joinedMemberIds || [])
+      .map(id => {
+        const m = team.members.find(member => member.id === id);
+        return m ? `${m.emoji} ${m.name}` : null;
+      })
+      .filter(Boolean)
+      .join(', ');
+    md += `- **Participants**: ${joinedNames || 'None'}\n\n`;
+    
+    // 2. Health Check Averages
+    md += `## 1. Participant Morale & Team Health\n\n`;
+    const healthScores = currentRetro.healthCheckScores || {};
+    md += `### Core Health Metrics\n`;
+    HEALTH_METRICS.forEach(metric => {
+      const scores = Object.values(healthScores)
+        .map(memberScores => memberScores[metric.id])
+        .filter(score => typeof score === 'number');
+      const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A';
+      md += `- **${metric.name}**: ${avg}/5 (${metric.description})\n`;
+    });
+    md += `\n`;
+
+    // AI Adoption Averages
+    const aiScores = currentRetro.aiAdoptionScores || {};
+    md += `### AI Adoption & Integration Metrics\n`;
+    AI_ADOPTION_QUESTIONS.forEach(metric => {
+      const scores = Object.values(aiScores)
+        .map(memberScores => memberScores[metric.id])
+        .filter(score => typeof score === 'number');
+      const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A';
+      md += `- **${metric.name}**: ${avg}/5 (${metric.description})\n`;
+    });
+    md += `\n`;
+
+    // 3. Icebreaker Responses
+    md += `## 2. Icebreaker Responses\n`;
+    const icebreakerQuestion = currentRetro.icebreakerQuestion || 'No icebreaker question selected';
+    md += `- **Question**: "${icebreakerQuestion}"\n`;
+    const responses = currentRetro.icebreakerAnswers || {};
+    if (Object.keys(responses).length > 0) {
+      Object.entries(responses).forEach(([memberId, answer]) => {
+        const member = team.members.find(m => m.id === memberId);
+        if (member && answer.trim()) {
+          md += `  - **${member.emoji} ${member.name}**: "${answer}"\n`;
+        }
+      });
+    } else {
+      md += `  - *No responses recorded.*\n`;
+    }
+    md += `\n`;
+
+    // 4. Warmup Game Scoreboard
+    md += `## 3. Warmup Game Scoreboard\n`;
+    const gameScores = currentRetro.gameScores || {};
+    if (Object.keys(gameScores).length > 0) {
+      const sortedScores = Object.entries(gameScores)
+        .map(([memberId, pts]) => ({
+          member: team.members.find(m => m.id === memberId),
+          score: pts
+        }))
+        .sort((a, b) => b.score - a.score);
+      
+      sortedScores.forEach(({ member, score: pts }, idx) => {
+        if (member) {
+          const medal = idx === 0 ? '🏆 ' : idx === 1 ? '🥈 ' : idx === 2 ? '🥉 ' : '• ';
+          md += `  - ${medal}${member.emoji} ${member.name}: ${pts} pts\n`;
+        }
+      });
+    } else {
+      md += `  - *No scores recorded.*\n`;
+    }
+    md += `\n`;
+
+    // 5. Star of the Release (Kudos)
+    md += `## 4. Star of the Release (Kudos)\n`;
+    const sorVotes = currentRetro.starOfReleaseVotes || {};
+    if (Object.keys(sorVotes).length > 0) {
+      Object.entries(sorVotes).forEach(([voterId, nomineeId]) => {
+        const voter = team.members.find(m => m.id === voterId);
+        const nominee = team.members.find(m => m.id === nomineeId);
+        if (voter && nominee) {
+          md += `  - **${voter.emoji} ${voter.name}** nominated **${nominee.emoji} ${nominee.name}**\n`;
+        }
+      });
+    } else {
+      md += `  - *No nominations cast.*\n`;
+    }
+    md += `\n`;
+
+    // 6. DAKI Board
+    md += `## 5. DAKI Board (Drop, Add, Keep, Improve)\n\n`;
+    const dakiCards = currentRetro.dakiCards || [];
+    const columns = {
+      drop: 'DROP (Things to stop doing)',
+      add: 'ADD (New ideas to start)',
+      keep: 'KEEP (Good practices to continue)',
+      improve: 'IMPROVE (Things to refine/optimize)'
+    };
+    
+    Object.entries(columns).forEach(([colKey, colName]) => {
+      md += `### ${colName}\n`;
+      const colCards = dakiCards.filter(c => c.column === colKey);
+      if (colCards.length > 0) {
+        colCards.forEach(card => {
+          md += `- "${card.content}" - by **${card.authorEmoji} ${card.authorName}** (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}\n`;
+        });
+      } else {
+        md += `- *No cards in this column.*\n`;
+      }
+      md += `\n`;
+    });
+
+    // 7. Committed Action Items
+    md += `## 6. Committed Action Items\n`;
+    const actionItems = currentRetro.actionItems || [];
+    if (actionItems.length > 0) {
+      actionItems.forEach(item => {
+        const assignee = team.members.find(m => m.id === item.assigneeId);
+        const assigneeName = assignee ? `${assignee.emoji} ${assignee.name}` : 'Unassigned';
+        md += `- [ ] **${item.description}**\n`;
+        md += `  - **Assignee**: ${assigneeName}\n`;
+        md += `  - **Due Date**: ${item.dueDate}\n`;
+        md += `  - **Status**: ${item.status}\n`;
+      });
+    } else {
+      md += `- *No action items created in this session.*\n`;
+    }
+    md += `\n`;
+
+    // 8. Retro Feedback & Value Rating
+    md += `## 7. Retro Feedback & Value Rating\n`;
+    md += `- **Value Score**: ${currentRetro.retroScore || score}/5\n`;
+    const finalFeedback = currentRetro.retroFeedback || facilitatorFeedback;
+    if (finalFeedback) {
+      md += `- **Facilitator Summary**: "${finalFeedback}"\n`;
+    }
+    
+    const memberFeedback = currentRetro.memberRetroFeedback || {};
+    if (Object.keys(memberFeedback).length > 0) {
+      md += `- **Team Feedback**:\n`;
+      Object.entries(memberFeedback).forEach(([mId, fbText]) => {
+        const member = team.members.find(m => m.id === mId);
+        if (member && fbText.trim()) {
+          md += `  - **${member.emoji} ${member.name}**: "${fbText}"\n`;
+        }
+      });
+    }
+
+    return md;
+  };
+
+  const handleCopy = () => {
+    playClick();
+    const text = activeTab === 'markdown' ? generateMarkdownExport() : JSON.stringify(currentRetro, null, 2);
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownload = () => {
+    playClick();
+    const text = activeTab === 'markdown' ? generateMarkdownExport() : JSON.stringify(currentRetro, null, 2);
+    const filename = activeTab === 'markdown' ? `retro-summary-${currentRetro?.id || 'export'}.md` : `retro-data-${currentRetro?.id || 'export'}.json`;
+    const mime = activeTab === 'markdown' ? 'text/markdown' : 'application/json';
+    
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrint = () => {
+    playClick();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const htmlContent = `
+      <html>
+        <head>
+          <title>${team?.name || 'Team'} - Retro Summary - ${formatRetroDate(currentRetro?.date)}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #1e293b;
+              line-height: 1.6;
+              padding: 40px;
+              max-width: 800px;
+              margin: 0 auto;
+              background-color: #ffffff;
+            }
+            h1 {
+              color: #1e1b4b;
+              font-size: 28px;
+              border-bottom: 2px solid #e2e8f0;
+              padding-bottom: 12px;
+              margin-bottom: 24px;
+            }
+            h2 {
+              color: #312e81;
+              font-size: 20px;
+              margin-top: 32px;
+              border-bottom: 1px solid #f1f5f9;
+              padding-bottom: 6px;
+            }
+            h3 {
+              color: #4338ca;
+              font-size: 16px;
+              margin-top: 20px;
+            }
+            ul {
+              padding-left: 20px;
+            }
+            li {
+              margin-bottom: 8px;
+            }
+            .meta-box {
+              background-color: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 16px;
+              margin-bottom: 24px;
+            }
+            .meta-box p {
+              margin: 4px 0;
+              font-size: 14px;
+            }
+            .metric-bar-container {
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              margin-bottom: 8px;
+            }
+            .metric-name {
+              width: 250px;
+              font-size: 14px;
+              font-weight: 600;
+            }
+            .metric-bar-outer {
+              flex-grow: 1;
+              background-color: #e2e8f0;
+              height: 10px;
+              border-radius: 5px;
+              overflow: hidden;
+            }
+            .metric-bar-inner {
+              background-color: #4f46e5;
+              height: 100%;
+            }
+            .metric-val {
+              font-size: 14px;
+              font-weight: 700;
+              width: 40px;
+              text-align: right;
+            }
+            .daki-column-section {
+              margin-bottom: 16px;
+              background-color: #fafafa;
+              border-left: 4px solid #cbd5e1;
+              padding: 12px 16px;
+              border-radius: 0 8px 8px 0;
+            }
+            .daki-column-section.drop { border-left-color: #ef4444; background-color: #fef2f2; }
+            .daki-column-section.add { border-left-color: #10b981; background-color: #ecfdf5; }
+            .daki-column-section.keep { border-left-color: #f59e0b; background-color: #fffbeb; }
+            .daki-column-section.improve { border-left-color: #06b6d4; background-color: #ecfeff; }
+            .daki-title {
+              font-weight: 700;
+              margin-bottom: 8px;
+              font-size: 15px;
+            }
+            .daki-title.drop { color: #991b1b; }
+            .daki-title.add { color: #065f46; }
+            .daki-title.keep { color: #92400e; }
+            .daki-title.improve { color: #155e75; }
+            .card-content {
+              font-size: 14px;
+              margin-bottom: 6px;
+              padding-bottom: 6px;
+              border-bottom: 1px dashed #e2e8f0;
+            }
+            .card-content:last-child {
+              border-bottom: none;
+              margin-bottom: 0;
+              padding-bottom: 0;
+            }
+            .action-item-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 12px;
+            }
+            .action-item-table th, .action-item-table td {
+              border: 1px solid #e2e8f0;
+              padding: 10px;
+              text-align: left;
+              font-size: 14px;
+            }
+            .action-item-table th {
+              background-color: #f8fafc;
+              font-weight: 600;
+            }
+            .action-checkbox {
+              display: inline-block;
+              width: 14px;
+              height: 14px;
+              border: 1px solid #94a3b8;
+              margin-right: 8px;
+              vertical-align: middle;
+            }
+            .no-print-btn {
+              padding: 10px 16px;
+              background-color: #4f46e5;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              font-weight: 600;
+              cursor: pointer;
+              box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.1);
+              transition: background-color 0.2s;
+            }
+            .no-print-btn:hover {
+              background-color: #4338ca;
+            }
+            @media print {
+              .no-print-header {
+                display: none;
+              }
+              body {
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;">
+            <span style="font-size: 14px; color: #64748b; font-weight: 500;">📄 Print Preview (Select "Save as PDF" in destination to export as PDF)</span>
+            <button onclick="window.print()" class="no-print-btn">
+              Print / Save as PDF
+            </button>
+          </div>
+          
+          <h1 style="margin: 0; border: none; padding: 0;">${currentRetro?.retroName || 'Retrospective Session Summary'}</h1>
+          <div style="margin-top: 15px; margin-bottom: 25px; height: 2px; background: linear-gradient(to right, #4f46e5, #06b6d4);"></div>
+          
+          <div class="meta-box">
+            <p><strong>Date:</strong> ${formatRetroDate(currentRetro?.date)}</p>
+            <p><strong>Team:</strong> ${team?.name || 'Unknown'}</p>
+            <p><strong>Session ID:</strong> ${currentRetro?.id || 'N/A'}</p>
+            <p><strong>Participants:</strong> ${(currentRetro?.joinedMemberIds || []).map(id => {
+              const m = team.members.find(member => member.id === id);
+              return m ? `${m.emoji} ${m.name}` : '';
+            }).filter(Boolean).join(', ') || 'None'}</p>
+            <p><strong>Overall Value Rating:</strong> ${currentRetro?.retroScore || score}/5</p>
+          </div>
+
+          <h2>1. Participant Morale & Team Health</h2>
+          
+          <h3>Core Health Metrics</h3>
+          ${HEALTH_METRICS.map(metric => {
+            const scores = Object.values(currentRetro?.healthCheckScores || {})
+              .map(memberScores => memberScores[metric.id])
+              .filter(s => typeof s === 'number');
+            const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+            const pct = (avg / 5) * 100;
+            return `
+              <div class="metric-bar-container">
+                <div class="metric-name">${metric.name}</div>
+                <div class="metric-bar-outer">
+                  <div class="metric-bar-inner" style="width: ${pct}%"></div>
+                </div>
+                <div class="metric-val">${avg > 0 ? avg.toFixed(1) : 'N/A'}/5</div>
+              </div>
+            `;
+          }).join('')}
+
+          <h3 style="margin-top: 24px;">AI Adoption & Integration Metrics</h3>
+          ${AI_ADOPTION_QUESTIONS.map(metric => {
+            const scores = Object.values(currentRetro?.aiAdoptionScores || {})
+              .map(memberScores => memberScores[metric.id])
+              .filter(s => typeof s === 'number');
+            const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+            const pct = (avg / 5) * 100;
+            return `
+              <div class="metric-bar-container">
+                <div class="metric-name">${metric.name}</div>
+                <div class="metric-bar-outer">
+                  <div class="metric-bar-inner" style="width: ${pct}%"></div>
+                </div>
+                <div class="metric-val">${avg > 0 ? avg.toFixed(1) : 'N/A'}/5</div>
+              </div>
+            `;
+          }).join('')}
+
+          <h2>2. Icebreaker Responses</h2>
+          <p><strong>Question:</strong> "${currentRetro?.icebreakerQuestion || 'No icebreaker question selected'}"</p>
+          <ul>
+            ${Object.entries(currentRetro?.icebreakerAnswers || {}).map(([memberId, answer]) => {
+              const member = team.members.find(m => m.id === memberId);
+              if (member && answer.trim()) {
+                return `<li><strong>${member.emoji} ${member.name}:</strong> "${answer}"</li>`;
+              }
+              return '';
+            }).join('') || '<li><em>No icebreaker answers logged.</em></li>'}
+          </ul>
+
+          <h2>3. Warmup Game Scoreboard</h2>
+          <ul>
+            ${Object.entries(currentRetro?.gameScores || {}).map(([memberId, pts]) => {
+              const member = team.members.find(m => m.id === memberId);
+              if (member) {
+                return `<li><strong>${member.emoji} ${member.name}:</strong> ${pts} pts</li>`;
+              }
+              return '';
+            }).join('') || '<li><em>No game scores.</em></li>'}
+          </ul>
+
+          <h2>4. Star of the Release Kudos</h2>
+          <ul>
+            ${Object.entries(currentRetro?.starOfReleaseVotes || {}).map(([voterId, nomineeId]) => {
+              const voter = team.members.find(m => m.id === voterId);
+              const nominee = team.members.find(m => m.id === nomineeId);
+              if (voter && nominee) {
+                return `<li><strong>${voter.emoji} ${voter.name}</strong> nominated <strong>${nominee.emoji} ${nominee.name}</strong></li>`;
+              }
+              return '';
+            }).join('') || '<li><em>No kudos recorded.</em></li>'}
+          </ul>
+
+          <h2>5. DAKI Board</h2>
+          
+          <div class="daki-column-section drop">
+            <div class="daki-title drop">DROP (Things to stop doing)</div>
+            ${currentRetro?.dakiCards.filter(c => c.column === 'drop').map(card => `
+              <div class="card-content">
+                "${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em>
+              </div>
+            `).join('') || '<em>No cards</em>'}
+          </div>
+
+          <div class="daki-column-section add">
+            <div class="daki-title add">ADD (New ideas to start)</div>
+            ${currentRetro?.dakiCards.filter(c => c.column === 'add').map(card => `
+              <div class="card-content">
+                "${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em>
+              </div>
+            `).join('') || '<em>No cards</em>'}
+          </div>
+
+          <div class="daki-column-section keep">
+            <div class="daki-title keep">KEEP (Good practices to continue)</div>
+            ${currentRetro?.dakiCards.filter(c => c.column === 'keep').map(card => `
+              <div class="card-content">
+                "${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em>
+              </div>
+            `).join('') || '<em>No cards</em>'}
+          </div>
+
+          <div class="daki-column-section improve">
+            <div class="daki-title improve">IMPROVE (Things to refine)</div>
+            ${currentRetro?.dakiCards.filter(c => c.column === 'improve').map(card => `
+              <div class="card-content">
+                "${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em>
+              </div>
+            `).join('') || '<em>No cards</em>'}
+          </div>
+
+          <h2>6. Committed Action Items</h2>
+          <table class="action-item-table">
+            <thead>
+              <tr>
+                <th style="width: 55%">Description</th>
+                <th style="width: 25%">Assignee</th>
+                <th style="width: 20%">Due Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${currentRetro?.actionItems.map(item => {
+                const assignee = team.members.find(m => m.id === item.assigneeId);
+                const assigneeName = assignee ? `${assignee.emoji} ${assignee.name}` : 'Unassigned';
+                return `
+                  <tr>
+                    <td><span class="action-checkbox"></span> <strong>${item.description}</strong></td>
+                    <td>${assigneeName}</td>
+                    <td>${item.dueDate}</td>
+                  </tr>
+                `;
+              }).join('') || '<tr><td colspan="3"><em>No action items committed.</em></td></tr>'}
+            </tbody>
+          </table>
+
+          <h2>7. Final Retro Feedback & Summaries</h2>
+          ${currentRetro?.retroFeedback || facilitatorFeedback ? `<p><strong>Facilitator Summary:</strong> "${currentRetro?.retroFeedback || facilitatorFeedback}"</p>` : ''}
+          
+          <ul>
+            ${Object.entries(currentRetro?.memberRetroFeedback || {}).map(([mId, text]) => {
+              const member = team.members.find(m => m.id === mId);
+              if (member && text.trim()) {
+                return `<li><strong>${member.emoji} ${member.name}:</strong> "${text}"</li>`;
+              }
+              return '';
+            }).join('')}
+          </ul>
+
+          <script>
+            // Auto trigger print setup
+            window.addEventListener('DOMContentLoaded', () => {
+              setTimeout(() => { window.print(); }, 500);
+            });
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const handleCopyRichText = async () => {
+    playClick();
+    const htmlContent = `
+      <h2>${currentRetro?.retroName || 'DAKI Retrospective Session Summary'}</h2>
+      <p><strong>Date:</strong> ${formatRetroDate(currentRetro?.date)}<br>
+      <strong>Team:</strong> ${team?.name || 'Unknown'}<br>
+      <strong>Session ID:</strong> ${currentRetro?.id || 'N/A'}<br>
+      <strong>Participants:</strong> ${(currentRetro?.joinedMemberIds || []).map(id => {
+        const m = team.members.find(member => member.id === id);
+        return m ? `${m.emoji} ${m.name}` : '';
+      }).filter(Boolean).join(', ') || 'None'}</p>
+
+      <h3>1. Participant Morale & Team Health</h3>
+      <ul>
+        ${HEALTH_METRICS.map(metric => {
+          const scores = Object.values(currentRetro?.healthCheckScores || {})
+            .map(memberScores => memberScores[metric.id])
+            .filter(s => typeof s === 'number');
+          const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A';
+          return `<li><strong>${metric.name}:</strong> ${avg}/5</li>`;
+        }).join('')}
+      </ul>
+
+      <h3>AI Adoption Metrics</h3>
+      <ul>
+        ${AI_ADOPTION_QUESTIONS.map(metric => {
+          const scores = Object.values(currentRetro?.aiAdoptionScores || {})
+            .map(memberScores => memberScores[metric.id])
+            .filter(s => typeof s === 'number');
+          const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A';
+          return `<li><strong>${metric.name}:</strong> ${avg}/5</li>`;
+        }).join('')}
+      </ul>
+
+      <h3>2. Icebreaker Responses</h3>
+      <p><strong>Question:</strong> "${currentRetro?.icebreakerQuestion || 'No icebreaker question selected'}"</p>
+      <ul>
+        ${Object.entries(currentRetro?.icebreakerAnswers || {}).map(([memberId, answer]) => {
+          const member = team.members.find(m => m.id === memberId);
+          if (member && answer.trim()) {
+            return `<li><strong>${member.emoji} ${member.name}:</strong> "${answer}"</li>`;
+          }
+          return '';
+        }).join('')}
+      </ul>
+
+      <h3>3. Warmup Game Scoreboard</h3>
+      <ul>
+        ${Object.entries(currentRetro?.gameScores || {}).map(([memberId, pts]) => {
+          const member = team.members.find(m => m.id === memberId);
+          if (member) {
+            return `<li><strong>${member.emoji} ${member.name}:</strong> ${pts} pts</li>`;
+          }
+          return '';
+        }).join('')}
+      </ul>
+
+      <h3>4. Star of the Release Kudos</h3>
+      <ul>
+        ${Object.entries(currentRetro?.starOfReleaseVotes || {}).map(([voterId, nomineeId]) => {
+          const voter = team.members.find(m => m.id === voterId);
+          const nominee = team.members.find(m => m.id === nomineeId);
+          if (voter && nominee) {
+            return `<li><strong>${voter.emoji} ${voter.name}</strong> nominated <strong>${nominee.emoji} ${nominee.name}</strong></li>`;
+          }
+          return '';
+        }).join('')}
+      </ul>
+
+      <h3>5. DAKI Board</h3>
+      <h4>DROP (Things to stop doing)</h4>
+      <ul>
+        ${currentRetro?.dakiCards.filter(c => c.column === 'drop').map(card => `
+          <li>"${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em></li>
+        `).join('') || '<li><em>No cards</em></li>'}
+      </ul>
+
+      <h4>ADD (New ideas to start)</h4>
+      <ul>
+        ${currentRetro?.dakiCards.filter(c => c.column === 'add').map(card => `
+          <li>"${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em></li>
+        `).join('') || '<li><em>No cards</em></li>'}
+      </ul>
+
+      <h4>KEEP (Good practices to continue)</h4>
+      <ul>
+        ${currentRetro?.dakiCards.filter(c => c.column === 'keep').map(card => `
+          <li>"${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em></li>
+        `).join('') || '<li><em>No cards</em></li>'}
+      </ul>
+
+      <h4>IMPROVE (Things to refine/optimize)</h4>
+      <ul>
+        ${currentRetro?.dakiCards.filter(c => c.column === 'improve').map(card => `
+          <li>"${card.content}" - <em>by ${card.authorEmoji} ${card.authorName} (${card.votes} votes) ${card.category ? `[${card.category}]` : ''}</em></li>
+        `).join('') || '<li><em>No cards</em></li>'}
+      </ul>
+
+      <h3>6. Committed Action Items</h3>
+      <table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%;">
+        <thead>
+          <tr style="background-color: #f2f2f2;">
+            <th>Description</th>
+            <th>Assignee</th>
+            <th>Due Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${currentRetro?.actionItems.map(item => {
+            const assignee = team.members.find(m => m.id === item.assigneeId);
+            const assigneeName = assignee ? `${assignee.emoji} ${assignee.name}` : 'Unassigned';
+            return `
+              <tr>
+                <td><strong>${item.description}</strong></td>
+                <td>${assigneeName}</td>
+                <td>${item.dueDate}</td>
+                <td>${item.status}</td>
+              </tr>
+            `;
+          }).join('') || '<tr><td colspan="4">No action items committed.</td></tr>'}
+        </tbody>
+      </table>
+
+      <h3>7. Final Retro Feedback</h3>
+      <p><strong>Value Score:</strong> ${currentRetro?.retroScore || score}/5</p>
+      ${currentRetro?.retroFeedback || facilitatorFeedback ? `<p><strong>Facilitator Summary:</strong> "${currentRetro?.retroFeedback || facilitatorFeedback}"</p>` : ''}
+      <ul>
+        ${Object.entries(currentRetro?.memberRetroFeedback || {}).map(([mId, text]) => {
+          const member = team.members.find(m => m.id === mId);
+          if (member && text.trim()) {
+            return `<li><strong>${member.emoji} ${member.name}:</strong> "${text}"</li>`;
+          }
+          return '';
+        }).join('')}
+      </ul>
+    `;
+
+    try {
+      const blobHTML = new Blob([htmlContent], { type: 'text/html' });
+      const blobText = new Blob([generateMarkdownExport()], { type: 'text/plain' });
+      const data = [new ClipboardItem({
+        'text/html': blobHTML,
+        'text/plain': blobText
+      })];
+      await navigator.clipboard.write(data);
+      setCopiedRichText(true);
+      setTimeout(() => setCopiedRichText(false), 2000);
+    } catch {
+      navigator.clipboard.writeText(generateMarkdownExport());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   if (completed) {
     return (
       <div className="w-full max-w-xl mx-auto flex flex-col gap-6 items-center justify-center text-center py-16 animate-fade-in">
@@ -120,15 +815,25 @@ export const ScorePhase: React.FC = () => {
           </p>
         </div>
 
-        <Button 
-          variant="primary" 
-          size="lg" 
-          onClick={() => { playClick(); window.location.reload(); }}
-          glow
-          className="mt-4 px-10"
-        >
-          Return to Setup
-        </Button>
+        <div className="flex gap-3 mt-4">
+          <Button 
+            variant="primary" 
+            size="lg" 
+            onClick={() => { playClick(); window.location.reload(); }}
+            glow
+            className="px-10"
+          >
+            Return to Setup
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => { playClick(); setShowExportModal(true); }}
+            icon={<Share2 className="w-4 h-4" />}
+          >
+            Export Retro Data
+          </Button>
+        </div>
       </div>
     );
   }
@@ -145,6 +850,14 @@ export const ScorePhase: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            variant="glass"
+            size="sm"
+            onClick={() => { playClick(); setShowExportModal(true); }}
+            icon={<Share2 className="w-4 h-4" />}
+          >
+            Export for LLM
+          </Button>
           {isFacilitator ? (
             <>
               <Button variant="outline" size="sm" onClick={prevPhase} icon={<ArrowLeft className="w-4 h-4" />}>
@@ -276,7 +989,7 @@ export const ScorePhase: React.FC = () => {
               <div className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center gap-3">
                 <Trophy className="w-8 h-8 text-amber-400 shrink-0" />
                 <div className="min-w-0">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Game Champion</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Release Champion</span>
                   {winner ? (
                     <p className="text-xs font-bold text-slate-100 truncate">
                       {winner.emoji} {winner.name} ({winner.score} pts)
@@ -337,6 +1050,99 @@ export const ScorePhase: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {showExportModal && (
+        <div className="skip-confirm-backdrop animate-fade-in" onClick={() => setShowExportModal(false)}>
+          <div className="skip-confirm-card w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl p-6 flex flex-col gap-4 max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-lg font-bold text-slate-100">Export Retro Data</h3>
+              </div>
+              <button 
+                onClick={() => setShowExportModal(false)}
+                className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-white/5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 text-left">
+              Copy or download your team's retrospective data to share it with your preferred LLM to generate insights, action logs, or next-step summaries.
+            </p>
+
+            <div className="flex gap-2 border-b border-white/5 pb-2 text-xs">
+              <button
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${activeTab === 'markdown' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                onClick={() => setActiveTab('markdown')}
+              >
+                Markdown Format
+              </button>
+              <button
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${activeTab === 'json' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                onClick={() => setActiveTab('json')}
+              >
+                JSON Format
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-slate-950/60 rounded-xl border border-white/5 p-4 max-h-[300px] font-mono text-[11px] leading-normal text-slate-300 text-left select-all whitespace-pre-wrap">
+              {activeTab === 'markdown' ? generateMarkdownExport() : JSON.stringify(currentRetro, null, 2)}
+            </div>
+
+            <div className="bg-indigo-950/20 border border-indigo-500/10 rounded-xl p-3.5 flex flex-col gap-1.5 text-xs text-left">
+              <span className="font-bold text-indigo-400 uppercase tracking-wider text-[10px]">💡 LLM Prompt Idea</span>
+              <p className="text-[11px] text-slate-300 italic">
+                "Based on the attached retro session log, please analyze our team health averages, identify the key themes on the DAKI board, and draft a clean summary highlighting team achievements, major friction points to resolve, and assignments for the committed action items."
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExportModal(false)}
+              >
+                Close
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handlePrint}
+                icon={<FileText className="w-4 h-4" />}
+              >
+                Save as PDF
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDownload}
+                icon={<Download className="w-4 h-4" />}
+              >
+                Download File
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCopyRichText}
+                icon={copiedRichText ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                glow={!copiedRichText}
+              >
+                {copiedRichText ? 'Copied Rich Text!' : 'Copy for Google Docs'}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCopy}
+                icon={copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                glow={!copied}
+              >
+                {copied ? 'Copied!' : 'Copy Raw Text'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -50,6 +50,9 @@ export interface RetroSession {
   icebreakerQuestion?: string;
   createdBy?: string;
   starOfReleaseVotes?: Record<string, string>;
+  status?: 'scheduled' | 'active' | 'completed';
+  retroName?: string;
+  jiraLink?: string;
 }
 
 
