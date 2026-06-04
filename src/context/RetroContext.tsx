@@ -53,7 +53,11 @@ interface RetroContextType {
   signOutUser: () => Promise<void>;
 
   scheduleRetro: (date: string, retroName?: string, jiraLink?: string) => Promise<RetroSession | null>;
-  startScheduledRetro: () => Promise<void>;
+  startScheduledRetro: (retroId?: string) => Promise<void>;
+  selectScheduledRetro: (sessionId: string) => Promise<void>;
+  joinScheduledRetro: (sessionId: string) => Promise<void>;
+  deleteRetroSession: (sessionId: string) => Promise<void>;
+  scheduledRetros: RetroSession[];
   hasJoined: boolean;
   joinRetro: () => void;
   isUsingMockData: boolean;
@@ -276,6 +280,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [history, setHistory] = useState<RetroSession[]>([]);
   const [previousActionItems, setPreviousActionItems] = useState<ActionItem[]>([]);
   const [currentRetro, setCurrentRetro] = useState<RetroSession | null>(null);
+  const [scheduledRetros, setScheduledRetros] = useState<RetroSession[]>([]);
   const [authUser, setAuthUser] = useState<User | null>(null);
 
   // Tracks active viewer member ID to support simulated multi-client actions
@@ -632,6 +637,46 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setPreviousActionItems([]);
       }
 
+      // Fetch scheduled sessions for the selected team
+      const { data: dbScheduled } = await supabase
+        .from('retro_sessions')
+        .select('*')
+        .eq('team_id', selectedTeamId)
+        .eq('status', 'scheduled')
+        .order('created_at', { ascending: true });
+
+      if (dbScheduled) {
+        const mappedScheduled = dbScheduled.map(session => {
+          const parsedFeedback = parseRetroFeedback(session.retro_feedback);
+          return {
+            id: session.id,
+            teamId: session.team_id,
+            date: session.date,
+            phase: session.phase,
+            status: session.status as 'scheduled',
+            retroName: parsedFeedback.retroName,
+            jiraLink: parsedFeedback.jiraLink,
+            gameScores: {},
+            icebreakerAnswers: {},
+            healthCheckScores: {},
+            aiAdoptionScores: {},
+            dakiCards: [],
+            actionItems: [],
+            retroScore: session.retro_score || 5,
+            retroFeedback: parsedFeedback.facilitatorFeedback || '',
+            memberRetroFeedback: parsedFeedback.memberFeedback || {},
+            joinedMemberIds: parsedFeedback.joinedMemberIds || [],
+            gameStatus: session.game_status || 'not_started',
+            icebreakerQuestion: session.icebreaker_question,
+            createdBy: session.created_by,
+            starOfReleaseVotes: {}
+          };
+        });
+        setScheduledRetros(mappedScheduled);
+      } else {
+        setScheduledRetros([]);
+      }
+
       // Check for query parameter session first
       const urlParams = new URLSearchParams(window.location.search);
       const querySessionId = urlParams.get('sessionId');
@@ -804,6 +849,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           
           if (payload.eventType === 'DELETE') {
             const deletedId = payload.old.id;
+            setScheduledRetros(prev => prev.filter(r => r.id !== deletedId));
             setCurrentRetro(prev => {
               if (prev && prev.id === deletedId) {
                 console.log('[RetroHub] Session was deleted/aborted, clearing state.');
@@ -886,17 +932,143 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 createdBy: s.created_by,
                 starOfReleaseVotes: starOfReleaseVotesInsert
               });
+            } else if (s.status === 'scheduled') {
+              console.log('[RetroHub] Scheduled session created for our team!');
+              const parsedFeedback = parseRetroFeedback(s.retro_feedback);
+              const newScheduledItem: RetroSession = {
+                id: s.id,
+                teamId: s.team_id,
+                date: s.date,
+                phase: s.phase,
+                status: 'scheduled',
+                retroName: parsedFeedback.retroName,
+                jiraLink: parsedFeedback.jiraLink,
+                gameScores: {},
+                icebreakerAnswers: {},
+                healthCheckScores: {},
+                aiAdoptionScores: {},
+                dakiCards: [],
+                actionItems: [],
+                retroScore: s.retro_score || 5,
+                retroFeedback: parsedFeedback.facilitatorFeedback || '',
+                memberRetroFeedback: parsedFeedback.memberFeedback || {},
+                joinedMemberIds: parsedFeedback.joinedMemberIds || [],
+                gameStatus: s.game_status || 'not_started',
+                icebreakerQuestion: s.icebreaker_question,
+                createdBy: s.created_by,
+                starOfReleaseVotes: {}
+              };
+              setScheduledRetros(prev => {
+                if (prev.some(r => r.id === s.id)) return prev;
+                return [...prev, newScheduledItem].sort((a, b) => a.date.localeCompare(b.date));
+              });
             }
           } else if (payload.eventType === 'UPDATE') {
             if (s.status === 'completed') {
               console.log('[RetroHub] Session completed. Archiving...');
+              setScheduledRetros(prev => prev.filter(r => r.id !== s.id));
               sessionStorage.removeItem('daki_retro_joined');
               setHasJoined(false);
               setCurrentRetro(null);
               window.location.reload();
-            } else if (s.status === 'active' || s.status === 'scheduled') {
+            } else if (s.status === 'active') {
+              console.log('[RetroHub] Session status is active. Loading/Updating current retro...');
               const parsedFeedback = parseRetroFeedback(s.retro_feedback);
-              console.log('[RetroHub] Session updated:', s.phase, s.status);
+              
+              setScheduledRetros(prev => prev.filter(r => r.id !== s.id));
+              
+              const { data: cards } = await supabase.from('daki_cards').select('*').eq('session_id', s.id);
+              const { data: actions } = await supabase.from('action_items').select('*').eq('session_id', s.id);
+              const { data: games } = await supabase.from('game_scores').select('*').eq('session_id', s.id);
+              const { data: ice } = await supabase.from('icebreaker_answers').select('*').eq('session_id', s.id);
+              const { data: health } = await supabase.from('health_check_scores').select('*').eq('session_id', s.id);
+              const { data: aiScores } = await supabase.from('ai_adoption_scores').select('*').eq('session_id', s.id);
+              const { data: starVotesInsert } = await supabase.from('star_of_release_votes').select('*').eq('session_id', s.id);
+
+              const gameScores: Record<string, number> = {};
+              games?.forEach(g => { gameScores[g.member_id] = g.score; });
+
+              const icebreakerAnswers: Record<string, string> = {};
+              ice?.forEach(i => { icebreakerAnswers[i.member_id] = i.answer; });
+
+              const healthCheckScores: Record<string, Record<string, number>> = {};
+              health?.forEach(h => {
+                if (!h.member_id) return;
+                if (!healthCheckScores[h.member_id]) {
+                  healthCheckScores[h.member_id] = {};
+                }
+                healthCheckScores[h.member_id][h.metric_id] = Number(h.score);
+              });
+
+              const aiAdoptionScores: Record<string, Record<string, number>> = {};
+              aiScores?.forEach(a => {
+                if (!a.member_id) return;
+                if (!aiAdoptionScores[a.member_id]) {
+                  aiAdoptionScores[a.member_id] = {};
+                }
+                aiAdoptionScores[a.member_id][a.question_id] = Number(a.score);
+              });
+
+              const starOfReleaseVotesInsert: Record<string, string> = {};
+              starVotesInsert?.forEach(v => { starOfReleaseVotesInsert[v.voted_by_member_id] = v.nominee_member_id; });
+
+              setCurrentRetro({
+                id: s.id,
+                teamId: s.team_id,
+                date: s.date,
+                phase: s.phase,
+                status: s.status,
+                retroName: parsedFeedback.retroName,
+                jiraLink: parsedFeedback.jiraLink,
+                gameScores,
+                icebreakerAnswers,
+                healthCheckScores,
+                aiAdoptionScores,
+                dakiCards: (cards || []).map(mapCardFromDb),
+                actionItems: (actions || []).map((a) => mapActionItemFromDb(a, loadLocalActionComments(s.team_id))),
+                retroScore: s.retro_score,
+                retroFeedback: parsedFeedback.facilitatorFeedback,
+                memberRetroFeedback: parsedFeedback.memberFeedback,
+                joinedMemberIds: parsedFeedback.joinedMemberIds,
+                gameStatus: s.game_status,
+                gameStartedAt: s.game_started_at,
+                icebreakerQuestion: s.icebreaker_question,
+                createdBy: s.created_by,
+                starOfReleaseVotes: starOfReleaseVotesInsert
+              });
+            } else if (s.status === 'scheduled') {
+              const parsedFeedback = parseRetroFeedback(s.retro_feedback);
+              console.log('[RetroHub] Scheduled session updated:', s.id);
+              
+              const updatedSession: RetroSession = {
+                id: s.id,
+                teamId: s.team_id,
+                date: s.date,
+                phase: s.phase,
+                status: 'scheduled',
+                retroName: parsedFeedback.retroName,
+                jiraLink: parsedFeedback.jiraLink,
+                gameScores: {},
+                icebreakerAnswers: {},
+                healthCheckScores: {},
+                aiAdoptionScores: {},
+                dakiCards: [],
+                actionItems: [],
+                retroScore: s.retro_score || 5,
+                retroFeedback: parsedFeedback.facilitatorFeedback || '',
+                memberRetroFeedback: parsedFeedback.memberFeedback || {},
+                joinedMemberIds: parsedFeedback.joinedMemberIds || [],
+                gameStatus: s.game_status || 'not_started',
+                icebreakerQuestion: s.icebreaker_question,
+                createdBy: s.created_by,
+                starOfReleaseVotes: {}
+              };
+              
+              setScheduledRetros(prev => {
+                const filtered = prev.filter(r => r.id !== s.id);
+                return [...filtered, updatedSession].sort((a, b) => a.date.localeCompare(b.date));
+              });
+
               setCurrentRetro(prev => {
                 if (prev && prev.id === s.id) {
                   return {
@@ -1492,6 +1664,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         starOfReleaseVotes: {}
       };
       
+      setScheduledRetros(prev => [...prev, scheduledSession].sort((a, b) => a.date.localeCompare(b.date)));
       setCurrentRetro(scheduledSession);
       return scheduledSession;
     }
@@ -1499,23 +1672,167 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return null;
   };
 
-  const startScheduledRetro = async () => {
-    if (!currentRetro) return;
+  const selectScheduledRetro = async (sessionId: string) => {
+    const { data: sessions } = await supabase
+      .from('retro_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .limit(1);
+      
+    if (sessions && sessions.length > 0) {
+      const s = sessions[0];
+      const parsedFeedback = parseRetroFeedback(s.retro_feedback);
+      
+      const { data: cards } = await supabase.from('daki_cards').select('*').eq('session_id', s.id);
+      const { data: actions } = await supabase.from('action_items').select('*').eq('session_id', s.id);
+      const { data: games } = await supabase.from('game_scores').select('*').eq('session_id', s.id);
+      const { data: ice } = await supabase.from('icebreaker_answers').select('*').eq('session_id', s.id);
+      const { data: health } = await supabase.from('health_check_scores').select('*').eq('session_id', s.id);
+      const { data: aiScores } = await supabase.from('ai_adoption_scores').select('*').eq('session_id', s.id);
+      const { data: starVotes } = await supabase.from('star_of_release_votes').select('*').eq('session_id', s.id);
+
+      const gameScores: Record<string, number> = {};
+      games?.forEach(g => { gameScores[g.member_id] = g.score; });
+
+      const icebreakerAnswers: Record<string, string> = {};
+      ice?.forEach(i => { icebreakerAnswers[i.member_id] = i.answer; });
+
+      const healthCheckScores: Record<string, Record<string, number>> = {};
+      health?.forEach(h => {
+        if (!h.member_id) return;
+        if (!healthCheckScores[h.member_id]) {
+          healthCheckScores[h.member_id] = {};
+        }
+        healthCheckScores[h.member_id][h.metric_id] = Number(h.score);
+      });
+
+      const aiAdoptionScores: Record<string, Record<string, number>> = {};
+      aiScores?.forEach(a => {
+        if (!a.member_id) return;
+        if (!aiAdoptionScores[a.member_id]) {
+          aiAdoptionScores[a.member_id] = {};
+        }
+        aiAdoptionScores[a.member_id][a.question_id] = Number(a.score);
+      });
+
+      const starOfReleaseVotes: Record<string, string> = {};
+      starVotes?.forEach(v => { starOfReleaseVotes[v.voted_by_member_id] = v.nominee_member_id; });
+
+      setCurrentRetro({
+        id: s.id,
+        teamId: s.team_id,
+        date: s.date,
+        phase: s.phase,
+        status: s.status,
+        gameScores,
+        icebreakerAnswers,
+        healthCheckScores,
+        aiAdoptionScores,
+        dakiCards: (cards || []).map(mapCardFromDb),
+        actionItems: (actions || []).map((a) => mapActionItemFromDb(a, loadLocalActionComments(s.team_id))),
+        retroScore: s.retro_score,
+        retroFeedback: parsedFeedback.facilitatorFeedback,
+        memberRetroFeedback: parsedFeedback.memberFeedback,
+        joinedMemberIds: parsedFeedback.joinedMemberIds,
+        retroName: parsedFeedback.retroName,
+        jiraLink: parsedFeedback.jiraLink,
+        gameStatus: s.game_status,
+        gameStartedAt: s.game_started_at,
+        icebreakerQuestion: s.icebreaker_question,
+        createdBy: s.created_by,
+        starOfReleaseVotes
+      });
+    }
+  };
+
+  const joinScheduledRetro = async (sessionId: string) => {
+    if (!isAuthorizedApprovedMember(selectedTeamId, currentUserMemberId)) {
+      console.warn('[RetroHub] Join blocked: current user is not an approved team member.');
+      return;
+    }
+
+    await selectScheduledRetro(sessionId);
+
+    sessionStorage.setItem('daki_retro_joined', 'true');
+    setHasJoined(true);
+
+    if (!currentUserMemberId) return;
+
+    const { data: sessionRow } = await supabase
+      .from('retro_sessions')
+      .select('retro_feedback')
+      .eq('id', sessionId)
+      .maybeSingle();
+
+    if (sessionRow) {
+      const parsedFeedback = parseRetroFeedback(sessionRow.retro_feedback);
+      const nextJoinedMemberIds = Array.from(new Set([...(parsedFeedback.joinedMemberIds || []), currentUserMemberId]));
+      const payload: RetroFeedbackPayload = {
+        ...parsedFeedback,
+        joinedMemberIds: nextJoinedMemberIds
+      };
+
+      await supabase
+        .from('retro_sessions')
+        .update({ retro_feedback: serializeRetroFeedback(payload) })
+        .eq('id', sessionId);
+        
+      setCurrentRetro(prev => {
+        if (prev && prev.id === sessionId) {
+          return {
+            ...prev,
+            joinedMemberIds: nextJoinedMemberIds
+          };
+        }
+        return prev;
+      });
+    }
+  };
+
+  const startScheduledRetro = async (retroId?: string) => {
+    const idToStart = retroId || currentRetro?.id;
+    if (!idToStart) return;
+
+    const sessionToStart = scheduledRetros.find(r => r.id === idToStart) || (currentRetro?.id === idToStart ? currentRetro : null);
+    if (!sessionToStart) return;
+
     const { error } = await supabase
       .from('retro_sessions')
       .update({ status: 'active', phase: 1 })
-      .eq('id', currentRetro.id);
+      .eq('id', idToStart);
+
     if (!error) {
-      setCurrentRetro(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          status: 'active',
-          phase: 1
-        };
-      });
+      const updatedSession: RetroSession = {
+        ...sessionToStart,
+        status: 'active',
+        phase: 1
+      };
+      setCurrentRetro(updatedSession);
+      setScheduledRetros(prev => prev.filter(r => r.id !== idToStart));
       sessionStorage.setItem('daki_retro_joined', 'true');
       setHasJoined(true);
+    }
+  };
+
+  const deleteRetroSession = async (sessionId: string) => {
+    const { error } = await supabase
+      .from('retro_sessions')
+      .delete()
+      .eq('id', sessionId);
+
+    if (!error) {
+      setScheduledRetros(prev => prev.filter(r => r.id !== sessionId));
+      setHistory(prev => prev.filter(r => r.id !== sessionId));
+      setCurrentRetro(prev => {
+        if (prev && prev.id === sessionId) {
+          sessionStorage.removeItem('daki_retro_joined');
+          setHasJoined(false);
+          return null;
+        }
+        return prev;
+      });
+    } else {
+      console.error('[RetroHub] Failed to delete session:', error);
     }
   };
 
@@ -1997,6 +2314,10 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       startRetro,
       scheduleRetro,
       startScheduledRetro,
+      selectScheduledRetro,
+      joinScheduledRetro,
+      deleteRetroSession,
+      scheduledRetros,
       nextPhase,
       prevPhase,
       setPhase,

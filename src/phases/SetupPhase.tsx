@@ -7,7 +7,7 @@ import {
   Users, Plus, Play, History, Calendar, CheckCircle,
   UserPlus, ShieldCheck,
   X, Star, Heart, CheckSquare, Bot, Activity,
-  Mail, Lock, LayoutGrid
+  Mail, Lock, LayoutGrid, Trash2
 } from 'lucide-react';
 import { playClick } from '../utils/sound';
 import { 
@@ -35,6 +35,9 @@ export const SetupPhase: React.FC = () => {
     joinRetro,
     scheduleRetro,
     startScheduledRetro,
+    joinScheduledRetro,
+    deleteRetroSession,
+    scheduledRetros,
     currentUserMemberId,
     loading
   } = useRetro();
@@ -46,6 +49,7 @@ export const SetupPhase: React.FC = () => {
   const [scheduleName, setScheduleName] = useState('');
   const [scheduleJira, setScheduleJira] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedRetroId, setCopiedRetroId] = useState<string | null>(null);
 
   
   // Team creation states
@@ -1316,6 +1320,120 @@ export const SetupPhase: React.FC = () => {
             )}
           </Card>
 
+        {/* Scheduled Retrospectives list */}
+        {hasApprovedAccess && scheduledRetros.length > 0 && (
+          <Card padding="lg">
+            <h2 className="text-xl font-bold flex items-center gap-2.5 mb-4">
+              <Calendar className="w-5 h-5 text-indigo-400" />
+              Scheduled Retrospectives ({scheduledRetros.length})
+            </h2>
+            <div className="flex flex-col gap-3">
+              {scheduledRetros.map(retro => {
+                const isRetroOwner = activeTeam?.ownerUserId === authUser?.id || activeTeam?.ownerMemberId === currentUserMemberId || retro.createdBy === currentUserMemberId;
+                return (
+                  <div 
+                    key={retro.id}
+                    className="p-4 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col gap-3 hover:bg-slate-950/60 transition-all duration-200"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-100 truncate">
+                          {retro.retroName || 'Upcoming Retrospective'}
+                        </p>
+                        <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                          {retro.date}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        {isRetroOwner && (
+                          <Button
+                            variant="success"
+                            size="sm"
+                            onClick={async () => {
+                              playClick();
+                              await startScheduledRetro(retro.id);
+                            }}
+                            icon={<Play className="w-4 h-4 fill-current" />}
+                            glow
+                          >
+                            Start Session
+                          </Button>
+                        )}
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            playClick();
+                            joinScheduledRetro(retro.id);
+                          }}
+                          icon={<Play className="w-4 h-4 fill-current" />}
+                        >
+                          Join Prep
+                        </Button>
+                        {isRetroOwner && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-rose-400 hover:text-rose-300 border-rose-500/20 hover:border-rose-500/50 hover:bg-rose-500/10 px-2.5"
+                            onClick={async () => {
+                              playClick();
+                              if (window.confirm('Are you sure you want to delete this scheduled retrospective session? This action cannot be undone.')) {
+                                await deleteRetroSession(retro.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {retro.jiraLink && (
+                      <div className="text-[11px] bg-slate-900/60 p-2 rounded-lg border border-white/5 flex items-center justify-between">
+                        <span className="text-slate-400 truncate">Jira Board/Tickets:</span>
+                        <a
+                          href={retro.jiraLink.startsWith('http') ? retro.jiraLink : `https://${retro.jiraLink}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-400 hover:text-indigo-300 font-semibold hover:underline shrink-0"
+                        >
+                          View Board ↗
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 border-t border-white/5 pt-2 text-[10px]">
+                      <span className="text-slate-500">Invite Link:</span>
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${window.location.origin}/?sessionId=${retro.id}`}
+                        className="form-input text-[10px] py-1 px-2 bg-slate-950/80 border-white/5 select-all flex-1"
+                        onClick={e => (e.target as HTMLInputElement).select()}
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="py-1 px-2.5 text-[9px] min-w-[65px]"
+                        onClick={() => {
+                          playClick();
+                          navigator.clipboard.writeText(`${window.location.origin}/?sessionId=${retro.id}`);
+                          setCopiedRetroId(retro.id);
+                          setTimeout(() => setCopiedRetroId(null), 2000);
+                        }}
+                      >
+                        {copiedRetroId === retro.id ? 'Copied!' : 'Copy'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
       </div>
 
       {/* Right Column - Team History */}
@@ -1346,10 +1464,30 @@ export const SetupPhase: React.FC = () => {
                     <span className="text-xs font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full truncate max-w-[200px]" title={session.retroName || 'Retro Archive'}>
                       {session.retroName || 'Retro Archive'}
                     </span>
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {session.date}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {session.date}
+                      </span>
+                       {(() => {
+                         const isSessionOwner = activeTeam?.ownerUserId === authUser?.id || activeTeam?.ownerMemberId === currentUserMemberId || session.createdBy === currentUserMemberId;
+                         return isSessionOwner && (
+                           <button
+                             onClick={async (e) => {
+                               e.stopPropagation();
+                               playClick();
+                               if (window.confirm('Are you sure you want to delete this archived retrospective session? This will permanently delete all cards, scores, and action items associated with it. This action cannot be undone.')) {
+                                 await deleteRetroSession(session.id);
+                               }
+                             }}
+                             className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                             title="Delete Archived Session"
+                           >
+                             <Trash2 className="w-3.5 h-3.5" />
+                           </button>
+                         );
+                       })()}
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 pt-1">
