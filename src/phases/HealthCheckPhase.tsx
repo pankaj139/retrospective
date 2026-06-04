@@ -38,7 +38,7 @@ export const HealthCheckPhase: React.FC = () => {
     return initial;
   }, [currentRetro?.healthCheckScores, currentUserMemberId]);
 
-  const ratings = reevaluating ? (draftRatings || dbRatings) : dbRatings;
+  const ratings = (reevaluating || !isDbSubmitted) ? (draftRatings || dbRatings) : dbRatings;
 
   const handleSliderChange = (metricId: string, val: number) => {
     setDraftRatings(prev => ({ ...(prev || dbRatings), [metricId]: val }));

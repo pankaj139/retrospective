@@ -47,9 +47,17 @@ export const StarOfReleasePhase: React.FC = () => {
     return { winner, count: maxVotes };
   }, [voteTally]);
 
-  const totalVoters = team.members.length;
-  const totalVotesCast = Object.keys(votes).length;
-  const allVoted = totalVotesCast >= totalVoters;
+  const liveMembers = useMemo(() => {
+    const joinedIds = currentRetro?.joinedMemberIds || [];
+    if (joinedIds.length === 0) return team.members;
+    return team.members.filter(m => joinedIds.includes(m.id));
+  }, [team.members, currentRetro?.joinedMemberIds]);
+
+  const totalVoters = liveMembers.length;
+  const totalVotesCast = useMemo(() => {
+    return Object.keys(votes).filter(voterId => liveMembers.some(m => m.id === voterId)).length;
+  }, [votes, liveMembers]);
+  const allVoted = totalVotesCast >= totalVoters && totalVoters > 0;
 
   const handleVote = async (nomineeId: string) => {
     if (!currentUserMemberId || nomineeId === currentUserMemberId) return;
@@ -174,7 +182,7 @@ export const StarOfReleasePhase: React.FC = () => {
           <Card padding="md">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Voting Progress</h3>
             <div className="flex flex-col gap-2">
-              {team.members.map(member => {
+              {liveMembers.map(member => {
                 const hasVoted = votes[member.id] !== undefined;
                 return (
                   <div key={member.id} className="flex items-center gap-2 text-xs">

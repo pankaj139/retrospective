@@ -112,6 +112,32 @@ export const ScorePhase: React.FC = () => {
 
   const winner = getGameWinner();
 
+  // Find Star of the Release winner
+  const getStarWinner = () => {
+    if (!currentRetro || !currentRetro.starOfReleaseVotes) return null;
+    const votes = currentRetro.starOfReleaseVotes;
+    const tally: Record<string, number> = {};
+    Object.values(votes).forEach(nomineeId => {
+      tally[nomineeId] = (tally[nomineeId] || 0) + 1;
+    });
+    
+    let maxVotes = 0;
+    let winnerId = '';
+    Object.entries(tally).forEach(([mId, count]) => {
+      if (count > maxVotes) {
+        maxVotes = count;
+        winnerId = mId;
+      }
+    });
+
+    if (maxVotes <= 0) return null;
+    
+    const member = team.members.find(m => m.id === winnerId);
+    return member ? { name: member.name, emoji: member.emoji, count: maxVotes } : null;
+  };
+
+  const starWinner = getStarWinner();
+
   const formatRetroDate = (dateValue?: string) => {
     if (!dateValue) return 'N/A';
     const parsedDate = new Date(dateValue);
@@ -920,7 +946,7 @@ export const ScorePhase: React.FC = () => {
                       ${isSelected ? 'text-amber-400 hover:text-amber-300' : 'text-slate-700 hover:text-slate-600'}
                     `}
                   >
-                    <Star className={`w-10 h-10 ${isSelected ? 'fill-current' : ''}`} />
+                    <Star className="w-10 h-10" fill={isSelected ? "currentColor" : "none"} />
                   </button>
                 );
               })}
@@ -984,12 +1010,45 @@ export const ScorePhase: React.FC = () => {
               Retro Session Recap Summary
             </h2>
 
+            {/* Star of the Release Spotlight Section */}
+            <div className="p-4 bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-indigo-500/5 border border-amber-500/20 rounded-xl flex items-center gap-4 shadow-md">
+              <div className="relative w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center shrink-0">
+                {starWinner ? (
+                  <>
+                    <span className="text-2xl">{starWinner.emoji}</span>
+                    <Trophy className="w-5 h-5 text-amber-400 absolute -bottom-1 -right-1 drop-shadow-[0_0_8px_rgba(245,158,11,0.9)] animate-pulse" />
+                  </>
+                ) : (
+                  <Star className="w-6 h-6 text-amber-500/40" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 fill-current" /> Star of the Release Spotlight
+                </span>
+                {starWinner ? (
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-100 mt-0.5">
+                      {starWinner.name}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Celebrated by the team with {starWinner.count} nomination{starWinner.count !== 1 ? 's' : ''}! 🎉
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 mt-0.5 italic">
+                    No nominations cast in this session.
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-grow">
               {/* Game Winner */}
               <div className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center gap-3">
                 <Trophy className="w-8 h-8 text-amber-400 shrink-0" />
                 <div className="min-w-0">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Release Champion</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Game Champion</span>
                   {winner ? (
                     <p className="text-xs font-bold text-slate-100 truncate">
                       {winner.emoji} {winner.name} ({winner.score} pts)

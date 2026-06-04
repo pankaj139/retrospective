@@ -1073,5 +1073,9 @@
   color: var(--color-add);
 }
 
+.fill-current {
+  fill: currentColor;
+}
+
 
 

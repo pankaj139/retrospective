@@ -38,7 +38,7 @@ export const AiAdoptionPhase: React.FC = () => {
     return initial;
   }, [currentRetro?.aiAdoptionScores, currentUserMemberId]);
 
-  const ratings = reevaluating ? (draftRatings || dbRatings) : dbRatings;
+  const ratings = (reevaluating || !isDbSubmitted) ? (draftRatings || dbRatings) : dbRatings;
 
   const handleSliderChange = (questionId: string, val: number) => {
     setDraftRatings(prev => ({ ...(prev || dbRatings), [questionId]: val }));
