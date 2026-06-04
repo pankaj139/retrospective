@@ -3,9 +3,9 @@ import ReactDOM from 'react-dom';
 import { useRetro } from '../context/RetroContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { 
-  Users, Plus, Play, History, Calendar, CheckCircle, 
-  ArrowLeft, ArrowRight, UserPlus, ShieldCheck, HelpCircle,
+import {
+  Users, Plus, Play, History, Calendar, CheckCircle,
+  UserPlus, ShieldCheck,
   X, Star, Heart, CheckSquare, Bot, Activity
 } from 'lucide-react';
 import { playClick } from '../utils/sound';
@@ -25,14 +25,17 @@ export const SetupPhase: React.FC = () => {
     startRetro, 
     history,
     currentRetro,
-    currentUserMemberId,
-    setCurrentUserMemberId,
     addTeamMember,
+    approveTeamMember,
+    rejectTeamMember,
+    authUser,
+    signInWithPassword,
+    signUpWithPassword,
+    signOutUser,
     joinRetro,
     loading
   } = useRetro();
 
-  const [activeTab, setActiveTab] = useState<'team' | 'user'>('team');
   const [selectedHistoryRetro, setSelectedHistoryRetro] = useState<RetroSession | null>(null);
   const [modalTab, setModalTab] = useState<'overview' | 'daki' | 'actions'>('overview');
 
@@ -50,8 +53,31 @@ export const SetupPhase: React.FC = () => {
   const [selfName, setSelfName] = useState('');
   const [selfRole, setSelfRole] = useState('Developer');
   const [selfEmoji, setSelfEmoji] = useState('🧑‍💻');
+  const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
 
   const activeTeam = teams.find(t => t.id === selectedTeamId) || teams[0];
+  const pendingMembers = activeTeam?.pendingMembers || [];
+  const approvedMemberForAuth = activeTeam?.members.find(member => {
+    if (!authUser) return false;
+    return (member.userId === authUser.id)
+      || (activeTeam.ownerUserId === authUser.id && activeTeam.ownerMemberId === member.id);
+  });
+  const selectedPendingMember = pendingMembers.find(member => member.userId === authUser?.id);
+  const hasApprovedAccess = Boolean(approvedMemberForAuth);
+  const hasPendingAccess = Boolean(selectedPendingMember);
+  const canApproveMembers = Boolean(
+    activeTeam
+    && authUser
+    && (
+      activeTeam.ownerUserId === authUser.id
+      || hasApprovedAccess
+    )
+  );
+  const isAuthenticated = Boolean(authUser);
   const teamHistory = history.filter(h => h.teamId === selectedTeamId);
 
   if (loading) {
@@ -93,6 +119,7 @@ export const SetupPhase: React.FC = () => {
 
   const handleCreateTeamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated) return;
     if (!newTeamName.trim()) return;
     const membersToCreate = newMembers.filter(m => m.name.trim() !== '');
     if (membersToCreate.length === 0) return;
@@ -104,11 +131,11 @@ export const SetupPhase: React.FC = () => {
     setNewTeamName('');
     setNewTeamEmoji('🚀');
     setNewMembers([{ name: '', role: 'Developer', emoji: '🧑‍💻' }]);
-    setActiveTab('user'); // Go to user select next
   };
 
   const handleAddSelfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated) return;
     if (!selfName.trim()) return;
 
     playClick();
@@ -120,6 +147,115 @@ export const SetupPhase: React.FC = () => {
       setIsAddingSelf(false);
     }
   };
+
+  const handleApproveMember = async (memberId: string) => {
+    playClick();
+    await approveTeamMember(selectedTeamId, memberId);
+  };
+
+  const handleRejectMember = async (memberId: string) => {
+    playClick();
+    await rejectTeamMember(selectedTeamId, memberId);
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthNotice('');
+
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+
+    playClick();
+    const result = authMode === 'sign-in'
+      ? await signInWithPassword(authEmail.trim(), authPassword)
+      : await signUpWithPassword(authEmail.trim(), authPassword);
+
+    if (!result.ok) {
+      setAuthError(result.error || 'Authentication failed.');
+      return;
+    }
+
+    if (authMode === 'sign-up') {
+      setAuthNotice('Account created. If email confirmation is enabled, please verify your inbox.');
+    } else {
+      setAuthNotice('Signed in successfully.');
+    }
+
+    setAuthPassword('');
+  };
+
+  const handleSignOut = async () => {
+    playClick();
+    await signOutUser();
+    setAuthNotice('Signed out.');
+    setAuthError('');
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="w-full max-w-2xl mx-auto animate-fade-in">
+        <Card variant="default" padding="md">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100">Authentication</h3>
+              <p className="text-[11px] text-slate-400">Sign in to access teams and retrospectives.</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleAuthSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input
+              type="email"
+              placeholder="Email"
+              value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)}
+              className="form-input"
+              required
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              className="form-input"
+              required
+              minLength={6}
+            />
+            <div className="sm:col-span-2 flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={authMode === 'sign-in' ? 'primary' : 'outline'}
+                onClick={() => { playClick(); setAuthMode('sign-in'); }}
+              >
+                Sign In
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={authMode === 'sign-up' ? 'primary' : 'outline'}
+                onClick={() => { playClick(); setAuthMode('sign-up'); }}
+              >
+                Sign Up
+              </Button>
+              <Button type="submit" size="sm" variant="success" className="ml-auto">
+                {authMode === 'sign-in' ? 'Continue' : 'Create Account'}
+              </Button>
+            </div>
+          </form>
+
+          {authError && (
+            <p className="text-[11px] text-rose-400 mt-2">{authError}</p>
+          )}
+          {authNotice && (
+            <p className="text-[11px] text-slate-300 mt-2">{authNotice}</p>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   const renderHistoryDetailModal = () => {
     if (!selectedHistoryRetro) return null;
@@ -619,40 +755,77 @@ export const SetupPhase: React.FC = () => {
 
       {/* Left Columns - Setup card */}
       <div className="md:col-span-2 flex flex-col gap-6">
-        
-        {/* Step Indicator Tabs header */}
-        {!isCreatingTeam && (
-          <div className="flex items-center gap-1 bg-slate-950/40 p-1 border border-white/5 rounded-xl">
-            <button
-              onClick={() => { playClick(); setActiveTab('team'); }}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-200
-                ${activeTab === 'team' 
-                  ? 'bg-indigo-600 text-white shadow-lg' 
-                  : 'text-slate-400 hover:text-slate-200'
-                }
-              `}
-            >
-              <Users className="w-4 h-4" />
-              1. Select Team
-            </button>
-            <button
-              onClick={() => { if (teams.length > 0) { playClick(); setActiveTab('user'); } }}
-              disabled={teams.length === 0}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-200
-                ${activeTab === 'user' 
-                  ? 'bg-indigo-600 text-white shadow-lg' 
-                  : 'text-slate-400 hover:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed'
-                }
-              `}
-            >
-              <UserPlus className="w-4 h-4" />
-              2. Select Self
-            </button>
-          </div>
-        )}
 
-        {/* Tab 1: Team setup & selector */}
-        {activeTab === 'team' && (
+        <Card variant="default" padding="md">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100">Authentication</h3>
+              <p className="text-[11px] text-slate-400">Sign in to request team access and manage approvals.</p>
+            </div>
+            {isAuthenticated && (
+              <Button variant="outline" size="sm" onClick={handleSignOut}>
+                Sign Out
+              </Button>
+            )}
+          </div>
+
+          {isAuthenticated ? (
+            <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+              Signed in as {authUser?.email || 'authenticated user'}
+            </div>
+          ) : (
+            <form onSubmit={handleAuthSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="email"
+                placeholder="Email"
+                value={authEmail}
+                onChange={e => setAuthEmail(e.target.value)}
+                className="form-input"
+                required
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={authPassword}
+                onChange={e => setAuthPassword(e.target.value)}
+                className="form-input"
+                required
+                minLength={6}
+              />
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={authMode === 'sign-in' ? 'primary' : 'outline'}
+                  onClick={() => { playClick(); setAuthMode('sign-in'); }}
+                >
+                  Sign In
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={authMode === 'sign-up' ? 'primary' : 'outline'}
+                  onClick={() => { playClick(); setAuthMode('sign-up'); }}
+                >
+                  Sign Up
+                </Button>
+                <Button type="submit" size="sm" variant="success" className="ml-auto">
+                  {authMode === 'sign-in' ? 'Continue' : 'Create Account'}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {authError && (
+            <p className="text-[11px] text-rose-400 mt-2">{authError}</p>
+          )}
+          {authNotice && (
+            <p className="text-[11px] text-slate-300 mt-2">{authNotice}</p>
+          )}
+        </Card>
+        
+        {/* Team setup & selector */}
+        {isAuthenticated && (
           <Card variant="brand" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <div className="flex flex-col gap-1">
@@ -667,6 +840,7 @@ export const SetupPhase: React.FC = () => {
                   size="sm" 
                   icon={<Plus className="w-4 h-4" />}
                   onClick={() => { playClick(); setIsCreatingTeam(true); }}
+                  disabled={!isAuthenticated}
                 >
                   New Team
                 </Button>
@@ -779,6 +953,7 @@ export const SetupPhase: React.FC = () => {
                   size="sm" 
                   icon={<Plus className="w-4 h-4" />}
                   onClick={() => { playClick(); setIsCreatingTeam(true); }}
+                  disabled={!isAuthenticated}
                 >
                   Create First Team
                 </Button>
@@ -804,14 +979,14 @@ export const SetupPhase: React.FC = () => {
                     <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
                     <div>
                       <p className="text-xs font-bold text-emerald-400">Retro Session is Running!</p>
-                      <p className="text-[10px] text-emerald-500/80">Other teammates are online. Click continue to choose your identity and join.</p>
+                      <p className="text-[10px] text-emerald-500/80">Other teammates are online. Approved members can join instantly.</p>
                     </div>
                   </div>
                 )}
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                    Team Members ({activeTeam?.members.length})
+                    Team Members ({activeTeam?.members.length || 0})
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {activeTeam?.members.map(member => (
@@ -821,7 +996,12 @@ export const SetupPhase: React.FC = () => {
                       >
                         <span className="text-xl">{member.emoji}</span>
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold truncate">{member.name}</p>
+                          <p className="text-xs font-semibold truncate flex items-center gap-1">
+                            {member.name}
+                            {activeTeam?.ownerMemberId === member.id && (
+                              <span className="text-[8px] px-1 rounded bg-amber-400/20 text-amber-300 uppercase tracking-wide">Owner</span>
+                            )}
+                          </p>
                           <p className="text-[9px] text-slate-500 truncate">{member.role}</p>
                         </div>
                       </div>
@@ -829,226 +1009,155 @@ export const SetupPhase: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-white/5 mt-2 flex justify-end">
-                  {currentRetro ? (
-                    <Button 
-                      variant="success" 
-                      onClick={() => { playClick(); setActiveTab('user'); }}
-                      icon={<ArrowRight className="w-4 h-4" />}
-                      iconRight
-                      glow
-                    >
-                      Join Active Retro (Select Identity)
-                    </Button>
+                <div className="p-3 bg-slate-950/30 border border-white/5 rounded-xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      Pending Requests ({pendingMembers.length})
+                    </label>
+                    {canApproveMembers ? (
+                      <span className="text-[10px] text-emerald-400">You can approve</span>
+                    ) : (
+                      <span className="text-[10px] text-slate-500">Owner/approved members can approve</span>
+                    )}
+                  </div>
+
+                  {pendingMembers.length === 0 ? (
+                    <p className="text-xs text-slate-500">No pending requests for this team.</p>
                   ) : (
-                    <Button 
-                      variant="primary" 
-                      onClick={() => { playClick(); setActiveTab('user'); }}
-                      icon={<ArrowRight className="w-4 h-4" />}
-                      iconRight
-                    >
-                      Continue to Select Self
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      {pendingMembers.map(member => (
+                        <div key={member.id} className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-lg">{member.emoji}</span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-slate-200 truncate">{member.name}</p>
+                              <p className="text-[10px] text-slate-500 truncate">{member.role}</p>
+                            </div>
+                          </div>
+                          {canApproveMembers ? (
+                            <div className="flex items-center gap-1">
+                              <Button size="sm" variant="success" className="text-[10px] px-2 py-1" onClick={() => handleApproveMember(member.id)}>
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline" className="text-[10px] px-2 py-1" onClick={() => handleRejectMember(member.id)}>
+                                Reject
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-amber-400">Waiting approval</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </div>
-            )}
-          </Card>
-        )}
 
-        {/* Tab 2: User selector and join/create retro triggers */}
-        {activeTab === 'user' && (
-          <Card variant="brand" padding="lg">
-            <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
-              <div className="flex items-center gap-2.5">
-                <button 
-                  onClick={() => { playClick(); setActiveTab('team'); }}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-all"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-                <div>
-                  <h2 className="text-lg font-bold flex items-center gap-2">
-                    Identify Yourself
-                  </h2>
-                  <p className="text-[10px] text-slate-400">Choose who is sitting at this browser tab.</p>
-                </div>
-              </div>
+                {isAddingSelf && (
+                  <form onSubmit={handleAddSelfSubmit} className="flex flex-col gap-4 bg-slate-950/20 p-4 border border-white/5 rounded-xl animate-fade-in">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Request Team Access</h3>
 
-              {!isAddingSelf && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  icon={<UserPlus className="w-3.5 h-3.5" />}
-                  onClick={() => { playClick(); setIsAddingSelf(true); }}
-                >
-                  Add Myself
-                </Button>
-              )}
-            </div>
-
-            {isAddingSelf ? (
-              <form onSubmit={handleAddSelfSubmit} className="flex flex-col gap-4 bg-slate-950/20 p-4 border border-white/5 rounded-xl mb-4 animate-fade-in">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Join Active Team List</h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] text-slate-400 font-bold uppercase">Avatar</label>
-                    <select
-                      value={selfEmoji}
-                      onChange={e => setSelfEmoji(e.target.value)}
-                      className="form-select text-center text-lg py-1.5"
-                    >
-                      {['🧑‍💻', '👩‍🎨', '🧙‍♂️', '🕵️‍♀️', '🤖', '🍎', '🎨', '👩‍💼', '💼', '🚀', '🐱', '🐼', '🦊', '🦖'].map(emo => (
-                        <option key={emo} value={emo}>{emo}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1 sm:col-span-2">
-                    <label className="text-[9px] text-slate-400 font-bold uppercase">Your Full Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. John Doe"
-                      required
-                      value={selfName}
-                      onChange={e => setSelfName(e.target.value)}
-                      className="form-input py-1.5 text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[9px] text-slate-400 font-bold uppercase mb-1">Your Role</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Developer, designer..."
-                    value={selfRole}
-                    onChange={e => setSelfRole(e.target.value)}
-                    className="form-input py-1.5 text-xs"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-1 border-t border-white/5 mt-1">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => { playClick(); setIsAddingSelf(false); }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" variant="success" size="sm">
-                    Add & Select
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="flex flex-col gap-6">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                    Click on your card to select yourself:
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
-                    {activeTeam?.members.map(member => {
-                      const isMe = member.id === currentUserMemberId;
-                      return (
-                        <div 
-                          key={member.id}
-                          onClick={() => { playClick(); setCurrentUserMemberId(member.id); }}
-                          className={`flex items-center gap-3 p-3 border rounded-xl hover:bg-white/10 hover:border-white/10 transition-all duration-200 cursor-pointer
-                            ${isMe 
-                              ? 'bg-indigo-500/12 border-indigo-500/60 shadow-[0_0_0_1px_rgba(99,102,241,0.18),0_0_18px_rgba(99,102,241,0.12)] -translate-y-[1px]' 
-                              : 'bg-white/5 border-white/5'
-                            }
-                          `}
-                          style={isMe ? { background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(99, 102, 241, 0.08))' } : undefined}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase">Avatar</label>
+                        <select
+                          value={selfEmoji}
+                          onChange={e => setSelfEmoji(e.target.value)}
+                          className="form-select text-center text-lg py-1.5"
                         >
-                          <span className="text-2xl">{member.emoji}</span>
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold truncate flex items-center gap-1">
-                              {member.name}
-                              {isMe && <span className="text-[8px] bg-indigo-400 text-slate-900 font-bold px-1 rounded">YOU</span>}
-                            </p>
-                            <p className="text-[9px] text-slate-500 truncate">{member.role}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {/* Add Myself card at the end of the grid */}
-                    <div 
-                      onClick={() => { playClick(); setIsAddingSelf(true); }}
-                      className="flex items-center justify-center gap-2 p-3 border border-dashed border-indigo-500/30 hover:border-indigo-500/60 bg-indigo-500/5 hover:bg-indigo-500/10 rounded-xl cursor-pointer transition-all text-indigo-400 hover:text-indigo-300 min-h-[60px]"
-                    >
-                      <UserPlus className="w-4 h-4 text-indigo-400" />
-                      <span className="text-xs font-bold">Add Myself</span>
-                    </div>
-                  </div>
-                </div>
+                          {['🧑‍💻', '👩‍🎨', '🧙‍♂️', '🕵️‍♀️', '🤖', '🍎', '🎨', '👩‍💼', '💼', '🚀', '🐱', '🐼', '🦊', '🦖'].map(emo => (
+                            <option key={emo} value={emo}>{emo}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                {/* Confirm Active Session Prompt */}
-                {currentRetro ? (
-                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-3">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-emerald-400">RETRO IS RUNNING FOR {activeTeam?.name.toUpperCase()}</h4>
-                      <p className="text-[10px] text-emerald-500/80 leading-relaxed mt-0.5">
-                        Active Date: {currentRetro.date}. Join in and collaborate in real-time.
-                      </p>
+                      <div className="flex flex-col gap-1 sm:col-span-2">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase">Your Full Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. John Doe"
+                          required
+                          value={selfName}
+                          onChange={e => setSelfName(e.target.value)}
+                          className="form-input py-1.5 text-xs"
+                        />
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="p-3.5 bg-slate-950/40 border border-white/5 rounded-xl flex items-start gap-3">
-                    <HelpCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+
                     <div>
-                      <h4 className="text-xs font-bold text-indigo-400">NO SESSION CURRENTLY RUNNING</h4>
-                      <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">
-                        You will host a new session. Other team members can join your session once you start it.
-                      </p>
+                      <label className="block text-[9px] text-slate-400 font-bold uppercase mb-1">Your Role</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Developer, designer..."
+                        value={selfRole}
+                        onChange={e => setSelfRole(e.target.value)}
+                        className="form-input py-1.5 text-xs"
+                      />
                     </div>
-                  </div>
+
+                    <div className="flex justify-end gap-2 pt-1 border-t border-white/5 mt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { playClick(); setIsAddingSelf(false); }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" variant="success" size="sm">
+                        Request Access
+                      </Button>
+                    </div>
+                  </form>
                 )}
 
-                {/* Big Action Join Button */}
-                <div className="pt-4 border-t border-white/5 mt-2 flex flex-col items-center gap-3">
-                  {!currentUserMemberId && (
-                    <p className="text-xs text-rose-400 font-semibold animate-pulse">
-                      ⚠️ Please select yourself from the list or click "Add Myself" to proceed.
+                <div className="pt-4 border-t border-white/5 mt-2 flex flex-col items-end gap-3">
+                  {hasPendingAccess && (
+                    <p className="text-xs text-amber-400 font-semibold">
+                      Access request pending approval.
                     </p>
                   )}
-                  {currentRetro ? (
-                    <Button 
-                      variant="success" 
-                      size="lg" 
-                      glow 
-                      icon={<Play className="w-5 h-5 fill-current" />}
-                      onClick={handleJoin}
-                      disabled={!currentUserMemberId}
-                      className="w-full sm:w-auto px-10 py-4 text-base font-bold tracking-wider uppercase animate-pulse-glow"
+
+                  {!hasApprovedAccess && !hasPendingAccess && !isAddingSelf && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<UserPlus className="w-4 h-4" />}
+                      onClick={() => { playClick(); setIsAddingSelf(true); }}
                     >
-                      Join Active Retrospective
+                      Request Access
                     </Button>
-                  ) : (
-                    <Button 
-                      variant="primary" 
-                      size="lg" 
-                      glow 
-                      icon={<Play className="w-5 h-5 fill-current" />}
-                      onClick={handleStart}
-                      disabled={!currentUserMemberId}
-                      className="w-full sm:w-auto px-10 py-4 text-base font-bold tracking-wider uppercase animate-pulse-glow"
-                    >
-                      Start Retrospective
-                    </Button>
+                  )}
+
+                  {hasApprovedAccess && (
+                    currentRetro ? (
+                      <Button
+                        variant="success"
+                        onClick={handleJoin}
+                        icon={<Play className="w-4 h-4 fill-current" />}
+                        glow
+                      >
+                        Join Active Retrospective
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        onClick={handleStart}
+                        icon={<Play className="w-4 h-4 fill-current" />}
+                      >
+                        Start Retrospective
+                      </Button>
+                    )
                   )}
                 </div>
               </div>
             )}
           </Card>
         )}
+
       </div>
 
       {/* Right Column - Team History */}
+      {isAuthenticated && (
       <div className="flex flex-col gap-6">
         <Card padding="lg" className="h-full flex flex-col">
           <h2 className="text-xl font-bold flex items-center gap-2.5 mb-4">
@@ -1107,6 +1216,7 @@ export const SetupPhase: React.FC = () => {
           </div>
         </Card>
       </div>
+      )}
       {renderHistoryDetailModal()}
     </div>
   );

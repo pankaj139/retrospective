@@ -3,12 +3,21 @@ export interface TeamMember {
   name: string;
   role: string;
   emoji: string;
+  userId?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  createdByMemberId?: string;
+  approvedByMemberId?: string;
+  createdAt?: string;
+  approvedAt?: string;
 }
 
 export interface Team {
   id: string;
   name: string;
   members: TeamMember[];
+  pendingMembers?: TeamMember[];
+  ownerMemberId?: string;
+  ownerUserId?: string;
 }
 
 export interface ActionItem {
@@ -155,6 +164,7 @@ export const MOCK_TEAMS: Team[] = [
   {
     id: 'team-1',
     name: '⚡ Pegasus Frontend',
+    ownerMemberId: 'm1',
     members: [
       { id: 'm1', name: 'Pankaj K.', role: 'Tech Lead', emoji: '🧙‍♂️' },
       { id: 'm2', name: 'Sarah Miller', role: 'UI Developer', emoji: '👩‍🎨' },
@@ -166,6 +176,7 @@ export const MOCK_TEAMS: Team[] = [
   {
     id: 'team-2',
     name: '🔥 Titan Backend',
+    ownerMemberId: 'm201',
     members: [
       { id: 'm201', name: 'Marcus Brody', role: 'Principal Architect', emoji: '🏛️' },
       { id: 'm202', name: 'Elena Rostova', role: 'Data Engineer', emoji: '👩‍🔬' },
@@ -176,6 +187,7 @@ export const MOCK_TEAMS: Team[] = [
   {
     id: 'team-3',
     name: '📱 Phoenix Mobile',
+    ownerMemberId: 'm301',
     members: [
       { id: 'm301', name: 'Rajesh Kumar', role: 'Android Lead', emoji: '🤖' },
       { id: 'm302', name: 'Lily Dubois', role: 'iOS Lead', emoji: '🍎' },

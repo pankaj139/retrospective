@@ -60,7 +60,7 @@ The retrospective is divided into **8 structured phases** synchronized in real-t
 * [RetroContext.tsx](src/context/RetroContext.tsx): Manages the state, database initialization, client session settings, and active PostgreSQL event listeners.
 * [App.tsx](src/App.tsx): Main router case block that renders phases and includes the global layout header and phase indicators.
 * [App.css](src/App.css): Layout guidelines, custom typography, animation definitions, and Vanilla CSS Tailwind emulation classes.
-* [SetupPhase.tsx](src/phases/SetupPhase.tsx): Identity lobby step. Allows choosing teams, rejoining active retros, selecting team identities, or adding new team members directly.
+* [SetupPhase.tsx](src/phases/SetupPhase.tsx): Identity lobby step. Supports Supabase email/password authentication, team selection, membership requests, and owner/member approval before joining retros.
 
 ---
 
@@ -150,13 +150,16 @@ CREATE POLICY "Allow public select" ON public.team_members FOR SELECT USING (tru
    VITE_SUPABASE_ANON_KEY=<your-public-anon-key>
    ```
 
-3. **Start Development Server**:
+3. **Create an Auth User**:
+   Use the Authentication panel in Supabase (Email provider) or the in-app sign-up form to create users before requesting team access.
+
+4. **Start Development Server**:
    ```bash
    npm run dev
    ```
    Open `http://localhost:5173` (or `http://localhost:5174`) in multiple browser windows to test multiplayer state sync.
 
-4. **Verify Production Bundle Build**:
+5. **Verify Production Bundle Build**:
    ```bash
    npm run build
    ```

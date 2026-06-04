@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabaseClient';
 import { 
   type Team, 
@@ -44,6 +45,12 @@ interface RetroContextType {
   leaveRetro: () => void;
   addSimulatedDakiCard: () => Promise<void>;
   addTeamMember: (teamId: string, name: string, role: string, emoji: string) => Promise<TeamMember | null>;
+  approveTeamMember: (teamId: string, memberId: string) => Promise<void>;
+  rejectTeamMember: (teamId: string, memberId: string) => Promise<void>;
+  authUser: User | null;
+  signInWithPassword: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  signUpWithPassword: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  signOutUser: () => Promise<void>;
 
   hasJoined: boolean;
   joinRetro: () => void;
@@ -75,6 +82,42 @@ type DbActionRow = {
   created_in_retro: string;
   progress_comment?: string;
 };
+
+type DbMemberRow = {
+  id: string;
+  team_id: string;
+  name: string;
+  role: string;
+  emoji: string;
+  status?: 'pending' | 'approved' | 'rejected' | null;
+  created_by_member_id?: string | null;
+  approved_by_member_id?: string | null;
+  user_id?: string | null;
+  created_by_user_id?: string | null;
+  approved_by_user_id?: string | null;
+  created_at?: string | null;
+  approved_at?: string | null;
+};
+
+const normalizeMemberStatus = (status: string | null | undefined): 'pending' | 'approved' | 'rejected' => {
+  if (status === 'pending' || status === 'approved' || status === 'rejected') {
+    return status;
+  }
+  return 'approved';
+};
+
+const mapTeamMemberFromDb = (member: DbMemberRow): TeamMember => ({
+  id: member.id,
+  name: member.name,
+  role: member.role,
+  emoji: member.emoji,
+  userId: member.user_id || undefined,
+  status: normalizeMemberStatus(member.status),
+  createdByMemberId: member.created_by_member_id || undefined,
+  approvedByMemberId: member.approved_by_member_id || undefined,
+  createdAt: member.created_at || undefined,
+  approvedAt: member.approved_at || undefined
+});
 
 // Map database card structure to client structure
 const mapCardFromDb = (dbCard: DbCardRow): DakiCard => ({
@@ -223,6 +266,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [history, setHistory] = useState<RetroSession[]>([]);
   const [previousActionItems, setPreviousActionItems] = useState<ActionItem[]>([]);
   const [currentRetro, setCurrentRetro] = useState<RetroSession | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
 
   // Tracks active viewer member ID to support simulated multi-client actions
   const [currentUserMemberId, setCurrentUserMemberId] = useState<string>(() => {
@@ -243,9 +287,59 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isUsingMockData, setIsUsingMockData] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 1. Initial Load: Fetch teams, members, and session history
+  useEffect(() => {
+    const initAuth = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('[RetroHub] Failed to load auth session.', error);
+        return;
+      }
+      setAuthUser(data.session?.user ?? null);
+    };
+
+    void initAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signInWithPassword = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  };
+
+  const signUpWithPassword = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  };
+
+  const signOutUser = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('[RetroHub] Failed to sign out.', error);
+    }
+    sessionStorage.removeItem('daki_retro_joined');
+    setHasJoined(false);
+    setCurrentUserMemberId('');
+    localStorage.removeItem('daki_retro_member_id');
+  };
+
+  // 1. Initial Load: Fetch teams and auth-scoped session history
   useEffect(() => {
     const fetchTeamsAndHistory = async () => {
+      let accessibleTeamIds: string[] = [];
+
       try {
         const { data: dbTeams, error: teamsError } = await supabase.from('teams').select('*').order('name');
         console.log('[RetroHub] Database fetch teams:', dbTeams, 'Error:', teamsError);
@@ -259,18 +353,28 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               if (memError) {
                 console.error('[RetroHub] Error fetching members for team', t.name, memError);
               }
+              const mappedMembers = (m || []).map((member) => mapTeamMemberFromDb(member as DbMemberRow));
               return {
                 id: t.id,
                 name: t.name,
-                members: (m || []).map((member) => ({
-                  id: member.id,
-                  name: member.name,
-                  role: member.role,
-                  emoji: member.emoji
-                }))
+                ownerMemberId: t.owner_member_id || undefined,
+                ownerUserId: t.owner_user_id || undefined,
+                members: mappedMembers.filter((member) => member.status === 'approved'),
+                pendingMembers: mappedMembers.filter((member) => member.status === 'pending')
               };
             })
           );
+
+          if (authUser) {
+            const ownedTeamIds = dbTeams
+              .filter((team) => team.owner_user_id === authUser.id)
+              .map((team) => team.id);
+            const approvedMembershipTeamIds = teamsWithMembers
+              .filter((team) => team.members.some((member) => member.userId === authUser.id))
+              .map((team) => team.id);
+            accessibleTeamIds = Array.from(new Set([...ownedTeamIds, ...approvedMembershipTeamIds]));
+          }
+
           console.log('[RetroHub] Loaded teams with members from Supabase:', teamsWithMembers);
           setTeams(teamsWithMembers);
           setIsUsingMockData(false);
@@ -296,11 +400,22 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setLoading(false);
       }
 
-      // Fetch completed retros
+      if (!authUser) {
+        setHistory([]);
+        return;
+      }
+
+      if (accessibleTeamIds.length === 0) {
+        setHistory([]);
+        return;
+      }
+
+      // Fetch completed retros only for teams where the auth user is approved/owner.
       const { data: dbSessions } = await supabase
         .from('retro_sessions')
         .select('*')
         .eq('status', 'completed')
+        .in('team_id', accessibleTeamIds)
         .order('created_at', { ascending: false });
 
       if (dbSessions) {
@@ -363,8 +478,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     };
 
-    fetchTeamsAndHistory();
-  }, []);
+    void fetchTeamsAndHistory();
+  }, [authUser]);
 
   // Realtime subscription for teams and team_members table changes globally
   useEffect(() => {
@@ -379,11 +494,27 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const newTeam = payload.new;
             setTeams(prev => {
               if (prev.some(t => t.id === newTeam.id)) return prev;
-              return [...prev, { id: newTeam.id, name: newTeam.name, members: [] }].sort((a, b) => a.name.localeCompare(b.name));
+              return [...prev, {
+                id: newTeam.id,
+                name: newTeam.name,
+                ownerMemberId: newTeam.owner_member_id || undefined,
+                ownerUserId: newTeam.owner_user_id || undefined,
+                members: [],
+                pendingMembers: []
+              }].sort((a, b) => a.name.localeCompare(b.name));
             });
           } else if (payload.eventType === 'UPDATE') {
             const updatedTeam = payload.new;
-            setTeams(prev => prev.map(t => (t.id === updatedTeam.id ? { ...t, name: updatedTeam.name } : t)));
+            setTeams(prev => prev.map(t => (
+              t.id === updatedTeam.id
+                ? {
+                  ...t,
+                  name: updatedTeam.name,
+                  ownerMemberId: updatedTeam.owner_member_id || t.ownerMemberId,
+                  ownerUserId: updatedTeam.owner_user_id || t.ownerUserId
+                }
+                : t
+            )));
           } else if (payload.eventType === 'DELETE') {
             const deletedId = payload.old.id;
             setTeams(prev => prev.filter(t => t.id !== deletedId));
@@ -400,33 +531,49 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         (payload) => {
           console.log('[RetroHub] Realtime Member Event:', payload);
           if (payload.eventType === 'INSERT') {
-            const newMember = payload.new;
-            const formatted: TeamMember = {
-              id: newMember.id,
-              name: newMember.name,
-              role: newMember.role,
-              emoji: newMember.emoji
-            };
+            const newMember = payload.new as DbMemberRow;
+            const formatted = mapTeamMemberFromDb(newMember);
             setTeams(prev => prev.map(t => {
               if (t.id === newMember.team_id) {
+                if (formatted.status === 'pending') {
+                  if ((t.pendingMembers || []).some(m => m.id === formatted.id)) return t;
+                  return { ...t, pendingMembers: [...(t.pendingMembers || []), formatted] };
+                }
+
                 if (t.members.some(m => m.id === formatted.id)) return t;
-                return { ...t, members: [...t.members, formatted] };
+                return {
+                  ...t,
+                  members: [...t.members, { ...formatted, status: 'approved' }],
+                  pendingMembers: (t.pendingMembers || []).filter(m => m.id !== formatted.id)
+                };
               }
               return t;
             }));
           } else if (payload.eventType === 'UPDATE') {
-            const updatedMember = payload.new;
-            const formatted: TeamMember = {
-              id: updatedMember.id,
-              name: updatedMember.name,
-              role: updatedMember.role,
-              emoji: updatedMember.emoji
-            };
+            const updatedMember = payload.new as DbMemberRow;
+            const formatted = mapTeamMemberFromDb(updatedMember);
             setTeams(prev => prev.map(t => {
               if (t.id === updatedMember.team_id) {
+                if (formatted.status === 'pending') {
+                  return {
+                    ...t,
+                    pendingMembers: [...(t.pendingMembers || []).filter(m => m.id !== formatted.id), formatted],
+                    members: t.members.filter(m => m.id !== formatted.id)
+                  };
+                }
+
+                if (formatted.status === 'approved') {
+                  return {
+                    ...t,
+                    members: [...t.members.filter(m => m.id !== formatted.id), { ...formatted, status: 'approved' }],
+                    pendingMembers: (t.pendingMembers || []).filter(m => m.id !== formatted.id)
+                  };
+                }
+
                 return {
                   ...t,
-                  members: t.members.map(m => (m.id === formatted.id ? formatted : m))
+                  members: t.members.filter(m => m.id !== formatted.id),
+                  pendingMembers: (t.pendingMembers || []).filter(m => m.id !== formatted.id)
                 };
               }
               return t;
@@ -436,7 +583,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setTeams(prev => prev.map(t => {
               return {
                 ...t,
-                members: t.members.filter(m => m.id !== deletedId)
+                members: t.members.filter(m => m.id !== deletedId),
+                pendingMembers: (t.pendingMembers || []).filter(m => m.id !== deletedId)
               };
             }));
           }
@@ -554,13 +702,47 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!selectedTeamId || teams.length === 0) return;
     const activeTeam = teams.find(t => t.id === selectedTeamId);
     if (activeTeam) {
-      const isMember = activeTeam.members.some(m => m.id === currentUserMemberId);
+      const approvedMatch = activeTeam.members.find(m => m.id === currentUserMemberId);
+      const pendingMatch = (activeTeam.pendingMembers || []).find(m => m.id === currentUserMemberId);
+      const approvedBelongsToAuth = Boolean(
+        authUser
+        && approvedMatch
+        && ((approvedMatch.userId && approvedMatch.userId === authUser.id)
+          || (activeTeam.ownerUserId === authUser.id && activeTeam.ownerMemberId === approvedMatch.id))
+      );
+      const pendingBelongsToAuth = Boolean(authUser && pendingMatch && pendingMatch.userId === authUser.id);
+      const isMember = approvedBelongsToAuth || pendingBelongsToAuth;
       if (!isMember) {
         queueMicrotask(() => setCurrentUserMemberId(''));
         localStorage.removeItem('daki_retro_member_id');
       }
     }
-  }, [selectedTeamId, teams, currentUserMemberId]);
+  }, [selectedTeamId, teams, currentUserMemberId, authUser]);
+
+  useEffect(() => {
+    if (!authUser) {
+      queueMicrotask(() => setCurrentUserMemberId(''));
+      localStorage.removeItem('daki_retro_member_id');
+      return;
+    }
+
+    if (!selectedTeamId || !teams.length || currentUserMemberId) return;
+    const activeTeam = teams.find((team) => team.id === selectedTeamId);
+    if (!activeTeam) return;
+
+    const linkedMember = activeTeam.members.find((member) => member.userId === authUser.id)
+      || (activeTeam.pendingMembers || []).find((member) => member.userId === authUser.id);
+
+    if (linkedMember) {
+      queueMicrotask(() => setCurrentUserMemberId(linkedMember.id));
+      return;
+    }
+
+    const ownerMemberId = activeTeam.ownerMemberId;
+    if (activeTeam.ownerUserId === authUser.id && ownerMemberId) {
+      queueMicrotask(() => setCurrentUserMemberId(ownerMemberId));
+    }
+  }, [authUser, selectedTeamId, teams, currentUserMemberId]);
 
   // Realtime subscription for retro_sessions table changes
   useEffect(() => {
@@ -943,53 +1125,123 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSelectedTeamId(teamId);
   };
 
+  const isAuthorizedApprovedMember = (teamId: string, memberId: string): boolean => {
+    if (!authUser || !memberId) return false;
+    const team = teams.find((entry) => entry.id === teamId);
+    if (!team) return false;
+
+    const approvedMember = team.members.find((member) => member.id === memberId);
+    if (!approvedMember) return false;
+
+    if (approvedMember.userId && approvedMember.userId === authUser.id) {
+      return true;
+    }
+
+    return team.ownerUserId === authUser.id && team.ownerMemberId === approvedMember.id;
+  };
+
   // Create a new team in database
   const createTeam = async (name: string, members: Omit<TeamMember, 'id'>[]) => {
+    if (!authUser) {
+      console.warn('[RetroHub] Team creation requires authentication.');
+      return null;
+    }
+
     const teamId = `team-${Date.now()}`;
-    const { error: teamErr } = await supabase.from('teams').insert({ id: teamId, name });
-    if (teamErr) return null;
+    const ownerMemberId = `m-${teamId}-0`;
+    const { error: teamErr } = await supabase.from('teams').insert({
+      id: teamId,
+      name,
+      owner_member_id: ownerMemberId,
+      owner_user_id: authUser.id
+    });
+    if (teamErr) {
+      console.error('[RetroHub] Failed to create team.', teamErr);
+      return null;
+    }
 
     const formattedMembers = members.map((m, idx) => ({
       id: `m-${teamId}-${idx}`,
       team_id: teamId,
       name: m.name,
       role: m.role,
-      emoji: m.emoji
+      emoji: m.emoji,
+      user_id: idx === 0 ? authUser.id : null,
+      status: 'approved',
+      created_by_member_id: ownerMemberId,
+      created_by_user_id: authUser.id,
+      approved_by_member_id: ownerMemberId,
+      approved_by_user_id: authUser.id,
+      approved_at: new Date().toISOString()
     }));
 
     const { error: memErr } = await supabase.from('team_members').insert(formattedMembers);
-    if (memErr) return null;
+    if (memErr) {
+      console.error('[RetroHub] Failed to seed team members.', memErr);
+      return null;
+    }
 
     const newTeam: Team = {
       id: teamId,
       name,
-      members: formattedMembers.map(m => ({ id: m.id, name: m.name, role: m.role, emoji: m.emoji }))
+      ownerMemberId,
+      ownerUserId: authUser.id,
+      members: formattedMembers.map(m => ({
+        id: m.id,
+        name: m.name,
+        role: m.role,
+        emoji: m.emoji,
+        userId: m.user_id || undefined,
+        status: 'approved',
+        createdByMemberId: ownerMemberId,
+        approvedByMemberId: ownerMemberId,
+        approvedAt: m.approved_at
+      })),
+      pendingMembers: []
     };
 
     setTeams(prev => [...prev, newTeam]);
     setSelectedTeamId(teamId);
+    setCurrentUserMemberId(ownerMemberId);
     return newTeam;
   };
 
   // Add a new member to an existing team in database
   const addTeamMember = async (teamId: string, name: string, role: string, emoji: string) => {
+    if (!authUser) {
+      console.warn('[RetroHub] Membership request requires authentication.');
+      return null;
+    }
+
     const memberId = `m-${teamId}-${Date.now()}`;
     const newMember = {
       id: memberId,
       team_id: teamId,
       name,
       role,
-      emoji
+      emoji,
+      user_id: authUser.id,
+      status: 'pending',
+      created_by_member_id: currentUserMemberId || null,
+      created_by_user_id: authUser.id
     };
 
     const { error } = await supabase.from('team_members').insert(newMember);
     if (!error) {
-      const formattedMember: TeamMember = { id: memberId, name, role, emoji };
+      const formattedMember: TeamMember = {
+        id: memberId,
+        name,
+        role,
+        emoji,
+        userId: authUser.id,
+        status: 'pending',
+        createdByMemberId: currentUserMemberId || undefined
+      };
       setTeams(prev => prev.map(t => {
         if (t.id === teamId) {
           return {
             ...t,
-            members: [...t.members, formattedMember]
+            pendingMembers: [...(t.pendingMembers || []), formattedMember]
           };
         }
         return t;
@@ -997,11 +1249,100 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setCurrentUserMemberId(memberId);
       return formattedMember;
     }
+    console.error('[RetroHub] Failed to request team access.', error);
     return null;
+  };
+
+  const approveTeamMember = async (teamId: string, memberId: string) => {
+    const activeTeam = teams.find((team) => team.id === teamId);
+    if (!activeTeam || !currentUserMemberId || !authUser) return;
+
+    const canApprove = activeTeam.ownerUserId === authUser.id
+      || activeTeam.ownerMemberId === currentUserMemberId
+      || activeTeam.members.some((member) => member.id === currentUserMemberId);
+
+    if (!canApprove) return;
+
+    const { error } = await supabase
+      .from('team_members')
+      .update({
+        status: 'approved',
+        approved_by_member_id: currentUserMemberId,
+        approved_by_user_id: authUser.id,
+        approved_at: new Date().toISOString()
+      })
+      .eq('id', memberId)
+      .eq('team_id', teamId);
+
+    if (error) {
+      console.error('[RetroHub] Failed to approve team member.', error);
+      return;
+    }
+
+    setTeams((prev) => prev.map((team) => {
+      if (team.id !== teamId) return team;
+      const pendingMember = (team.pendingMembers || []).find((member) => member.id === memberId);
+      if (!pendingMember) return team;
+      return {
+        ...team,
+        members: [...team.members, {
+          ...pendingMember,
+          status: 'approved',
+          approvedByMemberId: currentUserMemberId,
+          approvedAt: new Date().toISOString()
+        }],
+        pendingMembers: (team.pendingMembers || []).filter((member) => member.id !== memberId)
+      };
+    }));
+  };
+
+  const rejectTeamMember = async (teamId: string, memberId: string) => {
+    const activeTeam = teams.find((team) => team.id === teamId);
+    if (!activeTeam || !currentUserMemberId || !authUser) return;
+
+    const canApprove = activeTeam.ownerUserId === authUser.id
+      || activeTeam.ownerMemberId === currentUserMemberId
+      || activeTeam.members.some((member) => member.id === currentUserMemberId);
+
+    if (!canApprove) return;
+
+    const { error } = await supabase
+      .from('team_members')
+      .update({
+        status: 'rejected',
+        approved_by_member_id: currentUserMemberId,
+        approved_by_user_id: authUser.id,
+        approved_at: new Date().toISOString()
+      })
+      .eq('id', memberId)
+      .eq('team_id', teamId);
+
+    if (error) {
+      console.error('[RetroHub] Failed to reject team member.', error);
+      return;
+    }
+
+    setTeams((prev) => prev.map((team) => {
+      if (team.id !== teamId) return team;
+      return {
+        ...team,
+        pendingMembers: (team.pendingMembers || []).filter((member) => member.id !== memberId)
+      };
+    }));
+
+    if (currentUserMemberId === memberId) {
+      setCurrentUserMemberId('');
+      localStorage.removeItem('daki_retro_member_id');
+    }
   };
 
   // Start new retro session
   const startRetro = async () => {
+    if (!isAuthorizedApprovedMember(selectedTeamId, currentUserMemberId)) {
+      console.warn('[RetroHub] Start blocked: current user is not an approved team member.');
+      return;
+    }
+
     const retroId = `retro-${Date.now()}`;
     const team = teams.find(t => t.id === selectedTeamId) || teams[0];
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -1052,6 +1393,11 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const joinRetro = () => {
     if (currentRetro) {
+      if (!isAuthorizedApprovedMember(currentRetro.teamId, currentUserMemberId)) {
+        console.warn('[RetroHub] Join blocked: current user is not an approved team member.');
+        return;
+      }
+
       sessionStorage.setItem('daki_retro_joined', 'true');
       setHasJoined(true);
 
@@ -1537,6 +1883,12 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       leaveRetro,
       addSimulatedDakiCard,
       addTeamMember,
+      approveTeamMember,
+      rejectTeamMember,
+      authUser,
+      signInWithPassword,
+      signUpWithPassword,
+      signOutUser,
       hasJoined,
       joinRetro,
       isUsingMockData,
