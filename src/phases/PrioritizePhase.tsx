@@ -26,6 +26,7 @@ export const PrioritizePhase: React.FC = () => {
   // Modal/form state for generating action item from card
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [actionDesc, setActionDesc] = useState('');
+  const [actionDescDetail, setActionDescDetail] = useState('');
   const [actionAssignee, setActionAssignee] = useState(team.members[0]?.id || '');
   const [actionDate, setActionDate] = useState('');
 
@@ -34,6 +35,8 @@ export const PrioritizePhase: React.FC = () => {
     setActiveCardId(card.id);
     // Prefill description with card text
     setActionDesc(card.content);
+    // Prefill description detail with card description
+    setActionDescDetail(card.description || '');
     // Prefill date with 1 week from now
     const oneWeek = new Date();
     oneWeek.setDate(oneWeek.getDate() + 7);
@@ -45,9 +48,10 @@ export const PrioritizePhase: React.FC = () => {
     if (!actionDesc.trim()) return;
 
     playSuccess();
-    addActionItem(actionDesc, actionAssignee, actionDate);
+    addActionItem(actionDesc, actionAssignee, actionDate, actionDescDetail);
     setActiveCardId(null);
     setActionDesc('');
+    setActionDescDetail('');
   };
 
   const getAssigneeEmoji = (mId: string) => {
@@ -177,7 +181,7 @@ export const PrioritizePhase: React.FC = () => {
                         <form onSubmit={handleSaveActionItem} className="border-t border-white/5 pt-3 mt-1 flex flex-col gap-3.5 animate-fade-in">
                           <div>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
-                              Action Item Description
+                              Action Item Summary
                             </label>
                             <input
                               type="text"
@@ -185,6 +189,18 @@ export const PrioritizePhase: React.FC = () => {
                               onChange={e => setActionDesc(e.target.value)}
                               required
                               className="form-input text-xs py-2 bg-slate-900"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+                              Description Details
+                            </label>
+                            <textarea
+                              value={actionDescDetail}
+                              onChange={e => setActionDescDetail(e.target.value)}
+                              className="form-input text-xs py-2 bg-slate-900 min-h-[60px]"
+                              placeholder="Add more details about this action item..."
                             />
                           </div>
 
@@ -268,6 +284,11 @@ export const PrioritizePhase: React.FC = () => {
                     <p className="text-xs font-semibold text-slate-100 leading-relaxed">
                       {item.description}
                     </p>
+                    {item.descriptionDetail && (
+                      <p className="text-[10px] text-slate-400 leading-relaxed bg-black/20 p-2 rounded border border-white/5 whitespace-pre-wrap">
+                        {item.descriptionDetail}
+                      </p>
+                    )}
                     <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 border-t border-white/5 pt-2">
                       <div className="flex items-center gap-1 min-w-0">
                         <span className="text-xs shrink-0">{getAssigneeEmoji(item.assigneeId)}</span>

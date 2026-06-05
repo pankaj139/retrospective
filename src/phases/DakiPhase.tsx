@@ -6,7 +6,7 @@ import { type DakiCard } from '../utils/mockData';
 import { playClick, playPop, playClock, playBuzzer } from '../utils/sound';
 import { 
   LayoutGrid, ArrowLeft, ArrowRight, ThumbsUp, Trash2, 
-  Play, Pause, RotateCcw, Timer, PlusCircle
+  Play, Pause, RotateCcw, Timer, PlusCircle, Edit
 } from 'lucide-react';
 
 type ColumnType = 'drop' | 'add' | 'keep' | 'improve';
@@ -19,6 +19,7 @@ export const DakiPhase: React.FC = () => {
     addDakiCard, 
     voteDakiCard, 
     deleteDakiCard, 
+    updateDakiCard,
     nextPhase, 
     prevPhase,
     currentUserMemberId,
@@ -38,6 +39,145 @@ export const DakiPhase: React.FC = () => {
   const [activeColumn, setActiveColumn] = useState<ColumnType>('add');
   const [cardText, setCardText] = useState('');
   const [cardCategory, setCardCategory] = useState('Process');
+
+  // Card editor state
+  const [editingCard, setEditingCard] = useState<DakiCard | null>(null);
+  const [editSummary, setEditSummary] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editColumn, setEditColumn] = useState<ColumnType>('add');
+  const [editCategory, setEditCategory] = useState('Process');
+
+  const handleEditClick = (card: DakiCard) => {
+    playClick();
+    setEditingCard(card);
+    setEditSummary(card.content);
+    setEditDescription(card.description || '');
+    setEditColumn(card.column);
+    setEditCategory(card.category || 'General');
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCard || !editSummary.trim()) return;
+
+    playClick();
+    await updateDakiCard(editingCard.id, {
+      content: editSummary.trim(),
+      description: editDescription.trim(),
+      column: editColumn,
+      category: editCategory
+    });
+    setEditingCard(null);
+  };
+
+  const renderEditModal = () => {
+    if (!editingCard) return null;
+
+    return (
+      <div 
+        className="fixed inset-0 flex items-center justify-center z-50 p-4"
+        style={{ background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+        onClick={() => setEditingCard(null)}
+      >
+        <div 
+          className="rounded-2xl w-full max-w-md p-6 flex flex-col gap-4 bg-slate-900 border border-white/10"
+          style={{
+            background: 'linear-gradient(145deg, #0f1523 0%, #0a0e1a 100%)',
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 25px 80px rgba(0,0,0,0.8), 0 0 60px rgba(99,102,241,0.08)'
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Edit className="w-5 h-5 text-indigo-400" />
+              Edit Feedback Card
+            </h3>
+            <button 
+              onClick={() => setEditingCard(null)}
+              className="text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          <form onSubmit={handleEditSubmit} className="flex flex-col gap-4 text-xs">
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Summary</label>
+              <input
+                type="text"
+                required
+                value={editSummary}
+                onChange={e => setEditSummary(e.target.value)}
+                className="form-input bg-slate-950"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Description Details</label>
+              <textarea
+                value={editDescription}
+                onChange={e => setEditDescription(e.target.value)}
+                placeholder="Add more details, examples, or impact description..."
+                rows={4}
+                className="form-input bg-slate-950 resize-none py-2"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5 text-left">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">DAKI Column</label>
+                <select
+                  value={editColumn}
+                  onChange={e => setEditColumn(e.target.value as ColumnType)}
+                  className="form-select bg-slate-950"
+                >
+                  <option value="drop">🛑 DROP</option>
+                  <option value="add">➕ ADD</option>
+                  <option value="keep">⭐ KEEP</option>
+                  <option value="improve">⚙️ IMPROVE</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5 text-left">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Tag / Category</label>
+                <select
+                  value={editCategory}
+                  onChange={e => setEditCategory(e.target.value)}
+                  className="form-select bg-slate-950"
+                >
+                  <option value="Code">💻 Code</option>
+                  <option value="Testing">🕵️‍♀️ Testing</option>
+                  <option value="Process">⚙️ Process</option>
+                  <option value="Documentation">📚 Docs</option>
+                  <option value="Product">💼 Product</option>
+                  <option value="General">🏷️ General</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-2 pt-3 border-t border-white/5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingCard(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="success"
+                size="sm"
+                glow
+              >
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
 
   // Countdown timer state
   const [timerSeconds, setTimerSeconds] = useState(180); // 3 minutes default
@@ -292,7 +432,7 @@ export const DakiPhase: React.FC = () => {
           
           <div className="daki-column border-rose-500/5 bg-rose-950/5 min-h-[450px]">
             {getCardsByColumn('drop').map(card => (
-              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} onUpvote={handleUpvote} onDelete={handleDelete} getBadge={getCategoryBadgeClass} />
+              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} isTeamOwner={isTeamOwner} onUpvote={handleUpvote} onDelete={handleDelete} onEdit={handleEditClick} getBadge={getCategoryBadgeClass} />
             ))}
           </div>
         </div>
@@ -310,7 +450,7 @@ export const DakiPhase: React.FC = () => {
 
           <div className="daki-column border-emerald-500/5 bg-emerald-950/5 min-h-[450px]">
             {getCardsByColumn('add').map(card => (
-              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} onUpvote={handleUpvote} onDelete={handleDelete} getBadge={getCategoryBadgeClass} />
+              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} isTeamOwner={isTeamOwner} onUpvote={handleUpvote} onDelete={handleDelete} onEdit={handleEditClick} getBadge={getCategoryBadgeClass} />
             ))}
           </div>
         </div>
@@ -328,7 +468,7 @@ export const DakiPhase: React.FC = () => {
 
           <div className="daki-column border-amber-500/5 bg-amber-950/5 min-h-[450px]">
             {getCardsByColumn('keep').map(card => (
-              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} onUpvote={handleUpvote} onDelete={handleDelete} getBadge={getCategoryBadgeClass} />
+              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} isTeamOwner={isTeamOwner} onUpvote={handleUpvote} onDelete={handleDelete} onEdit={handleEditClick} getBadge={getCategoryBadgeClass} />
             ))}
           </div>
         </div>
@@ -346,27 +486,30 @@ export const DakiPhase: React.FC = () => {
 
           <div className="daki-column border-cyan-500/5 bg-cyan-950/5 min-h-[450px]">
             {getCardsByColumn('improve').map(card => (
-              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} onUpvote={handleUpvote} onDelete={handleDelete} getBadge={getCategoryBadgeClass} />
+              <DakiCardComponent key={card.id} card={card} currentUserMemberId={currentUserMemberId} isTeamOwner={isTeamOwner} onUpvote={handleUpvote} onDelete={handleDelete} onEdit={handleEditClick} getBadge={getCategoryBadgeClass} />
             ))}
           </div>
         </div>
       </div>
+      {renderEditModal()}
     </div>
   );
 };
 
-// Sub-component for individual DAKI card
 interface DakiCardComponentProps {
   card: DakiCard;
   currentUserMemberId: string;
+  isTeamOwner: boolean;
   onUpvote: (id: string) => void;
   onDelete: (id: string) => void;
+  onEdit: (card: DakiCard) => void;
   getBadge: (cat: string) => string;
 }
 
-const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUserMemberId, onUpvote, onDelete, getBadge }) => {
+const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUserMemberId, isTeamOwner, onUpvote, onDelete, onEdit, getBadge }) => {
   const isOwnCard = card.authorId === currentUserMemberId;
   const hasVoted = card.votedBy?.includes(currentUserMemberId);
+  const canModify = isOwnCard || isTeamOwner;
 
   return (
     <div className="daki-card-item flex flex-col justify-between h-auto gap-3 animate-fade-in">
@@ -376,9 +519,14 @@ const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUser
             {card.category}
           </span>
         </div>
-        <p className="text-xs text-slate-200 leading-relaxed font-medium">
+        <p className="text-xs text-slate-200 leading-relaxed font-semibold">
           {card.content}
         </p>
+        {card.description && (
+          <p className="text-[11px] text-slate-400 mt-1 whitespace-pre-wrap leading-relaxed border-l-2 border-indigo-500/30 pl-2">
+            {card.description}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1">
@@ -405,12 +553,25 @@ const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUser
             <span className="font-bold font-mono">{card.votes}</span>
           </button>
           
-          <button
-            onClick={() => onDelete(card.id)}
-            className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canModify && (
+            <button
+              onClick={() => onEdit(card)}
+              className="text-slate-500 hover:text-indigo-400 p-1 transition-colors"
+              title="Edit Feedback Card"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {canModify && (
+            <button
+              onClick={() => onDelete(card.id)}
+              className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+              title="Delete Feedback Card"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </div>

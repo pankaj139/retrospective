@@ -20,6 +20,13 @@ export interface Team {
   ownerUserId?: string;
 }
 
+export interface ActionItemUpdate {
+  comment: string;
+  timestamp: string;
+  authorName: string;
+  authorEmoji: string;
+}
+
 export interface ActionItem {
   id: string;
   description: string;
@@ -28,6 +35,8 @@ export interface ActionItem {
   status: 'Open' | 'In Progress' | 'Resolved';
   createdInRetro: string;
   progressComment?: string;
+  descriptionDetail?: string;
+  progressUpdates?: ActionItemUpdate[];
 }
 
 export interface RetroSession {
@@ -67,6 +76,7 @@ export interface DakiCard {
   category?: string;
   isSimulated?: boolean;
   votedBy?: string[];
+  description?: string;
 }
 
 export interface HealthMetric {

@@ -26,9 +26,16 @@ export const PrevActionsPhase: React.FC = () => {
     updatePrevActionItemStatus(itemId, status);
   };
 
+  const currentMember = team.members.find(m => m.id === currentUserMemberId);
+  const currentMemberName = currentMember?.name || 'Anonymous';
+  const currentMemberEmoji = currentMember?.emoji || '👤';
+
   const handleSaveComment = (itemId: string, status: 'Open' | 'In Progress' | 'Resolved') => {
+    const draft = commentDrafts[itemId] ?? '';
+    if (!draft.trim()) return;
     playClick();
-    updatePrevActionItemStatus(itemId, status, commentDrafts[itemId] ?? '');
+    updatePrevActionItemStatus(itemId, status, draft, currentMemberName, currentMemberEmoji);
+    setCommentDrafts(prev => ({ ...prev, [itemId]: '' }));
   };
 
   const getMemberDetails = (mId: string) => {
@@ -154,7 +161,12 @@ export const PrevActionsPhase: React.FC = () => {
                     <p className="text-sm font-semibold text-slate-100 mb-1 leading-relaxed">
                       {item.description}
                     </p>
-                    <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-400">
+                    {item.descriptionDetail && (
+                      <p className="text-xs text-slate-400 bg-black/25 p-2 rounded-lg border border-white/5 whitespace-pre-wrap mb-2">
+                        {item.descriptionDetail}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-400 mb-3">
                       <span className="flex items-center gap-1.5 bg-slate-900 px-2 py-0.5 rounded border border-white/5">
                         <User className="w-3.5 h-3.5 text-slate-500" />
                         <span className="text-[10px]">{assignee.emoji}</span>
@@ -171,26 +183,52 @@ export const PrevActionsPhase: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="mt-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        Progress Comment
-                      </label>
-                      <div className="flex flex-col gap-2">
+                    {/* Timeline section */}
+                    <div className="mt-4 border-t border-white/5 pt-3">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                        Progress Timeline ({item.progressUpdates?.length || 0})
+                      </h4>
+
+                      {/* Comment timeline items */}
+                      {item.progressUpdates && item.progressUpdates.length > 0 ? (
+                        <div className="flex flex-col gap-3 pl-2.5 border-l-2 border-indigo-500/20 my-3 ml-1">
+                          {item.progressUpdates.map((update, idx) => (
+                            <div key={idx} className="relative flex flex-col gap-1 text-xs">
+                              {/* Dot pointer */}
+                              <div className="absolute -left-[15px] top-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-4 ring-slate-950" />
+                              
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                <span>{update.authorEmoji}</span>
+                                <span className="font-semibold text-slate-300">{update.authorName}</span>
+                                <span className="text-[10px] text-slate-500 font-mono">• {update.timestamp}</span>
+                              </div>
+                              <p className="text-slate-350 pl-1 leading-relaxed whitespace-pre-wrap">
+                                {update.comment}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-500 italic my-2 pl-1">No updates posted yet.</p>
+                      )}
+
+                      {/* Add new update comment form */}
+                      <div className="flex gap-2 items-end mt-2">
                         <textarea
-                          value={commentDrafts[item.id] ?? item.progressComment ?? ''}
+                          value={commentDrafts[item.id] ?? ''}
                           onChange={(e) => setCommentDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
-                          rows={2}
-                          placeholder="Add latest progress update, blocker, or next step..."
-                          className="form-input text-xs py-2 bg-slate-900 w-full resize-none"
+                          rows={1}
+                          placeholder="Add new update to the timeline..."
+                          className="form-input text-xs py-2 bg-slate-900 flex-1 resize-none min-h-[36px]"
                         />
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-9 w-full"
+                          className="h-9 shrink-0 px-4"
                           onClick={() => handleSaveComment(item.id, item.status)}
                         >
-                          Save Comment
+                          Post Update
                         </Button>
                       </div>
                     </div>

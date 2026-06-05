@@ -6,6 +6,7 @@ import {
   type Team, 
   type TeamMember, 
   type ActionItem, 
+  type ActionItemUpdate,
   type RetroSession, 
   type DakiCard,
   MOCK_TEAMS,
@@ -36,8 +37,9 @@ interface RetroContextType {
   addDakiCard: (column: 'drop' | 'add' | 'keep' | 'improve', content: string, authorId: string, category?: string) => Promise<void>;
   voteDakiCard: (cardId: string, memberId: string) => Promise<void>;
   deleteDakiCard: (cardId: string) => Promise<void>;
-  addActionItem: (description: string, assigneeId: string, dueDate: string) => Promise<void>;
-  updatePrevActionItemStatus: (itemId: string, status: ActionItem['status'], progressComment?: string) => Promise<void>;
+  updateDakiCard: (cardId: string, updates: { content: string; description: string; column: DakiCard['column']; category: string }) => Promise<void>;
+  addActionItem: (description: string, assigneeId: string, dueDate: string, descriptionDetail?: string) => Promise<void>;
+  updatePrevActionItemStatus: (itemId: string, status: ActionItem['status'], progressComment?: string, authorName?: string, authorEmoji?: string) => Promise<void>;
   submitRetroFeedback: (memberId: string, feedback: string) => Promise<void>;
   setRetroScore: (score: number, feedback: string) => Promise<void>;
   completeRetro: () => Promise<{ ok: boolean; missingMemberIds: string[] }>;
@@ -77,6 +79,7 @@ type DbCardRow = {
   category?: string;
   is_simulated?: boolean;
   voted_by?: string[];
+  description?: string;
 };
 
 type DbActionRow = {
@@ -87,6 +90,8 @@ type DbActionRow = {
   status: ActionItem['status'];
   created_in_retro: string;
   progress_comment?: string;
+  description_detail?: string;
+  progress_updates?: any;
 };
 
 type DbMemberRow = {
@@ -136,7 +141,8 @@ const mapCardFromDb = (dbCard: DbCardRow): DakiCard => ({
   authorEmoji: dbCard.author_emoji,
   category: dbCard.category,
   isSimulated: dbCard.is_simulated,
-  votedBy: dbCard.voted_by || []
+  votedBy: dbCard.voted_by || [],
+  description: dbCard.description || ''
 });
 
 const ACTION_COMMENTS_STORAGE_PREFIX = 'daki_retro_action_comments_';
@@ -181,7 +187,9 @@ const mapActionItemFromDb = (dbAction: DbActionRow, localComments: Record<string
     dueDate: dbAction.due_date,
     status: dbAction.status,
     createdInRetro: dbAction.created_in_retro,
-    progressComment: commentFromDb || localComments[dbAction.id] || ''
+    progressComment: commentFromDb || localComments[dbAction.id] || '',
+    descriptionDetail: dbAction.description_detail || '',
+    progressUpdates: dbAction.progress_updates || []
   };
 };
 
@@ -2064,11 +2072,57 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Delete DAKI card
   const deleteDakiCard = async (cardId: string) => {
+    if (!currentRetro) return;
+    const card = currentRetro.dakiCards.find(c => c.id === cardId);
+    if (!card) return;
+
+    const team = teams.find(t => t.id === selectedTeamId);
+    const isCardOwner = card.authorId === currentUserMemberId;
+    const isTeamOwner = team && authUser && (
+      team.ownerUserId === authUser.id || team.ownerMemberId === currentUserMemberId
+    );
+
+    if (!isCardOwner && !isTeamOwner) {
+      console.warn('[RetroHub] Delete blocked: user is not the card author or team owner.');
+      return;
+    }
+
     await supabase.from('daki_cards').delete().eq('id', cardId);
   };
 
+  // Update DAKI card
+  const updateDakiCard = async (
+    cardId: string,
+    updates: { content: string; description: string; column: DakiCard['column']; category: string }
+  ) => {
+    if (!currentRetro) return;
+    const card = currentRetro.dakiCards.find(c => c.id === cardId);
+    if (!card) return;
+
+    const team = teams.find(t => t.id === selectedTeamId);
+    const isCardOwner = card.authorId === currentUserMemberId;
+    const isTeamOwner = team && authUser && (
+      team.ownerUserId === authUser.id || team.ownerMemberId === currentUserMemberId
+    );
+
+    if (!isCardOwner && !isTeamOwner) {
+      console.warn('[RetroHub] Update blocked: user is not the card author or team owner.');
+      return;
+    }
+
+    await supabase
+      .from('daki_cards')
+      .update({
+        content: updates.content,
+        description: updates.description,
+        column_name: updates.column,
+        category: updates.category
+      })
+      .eq('id', cardId);
+  };
+
   // Add action item
-  const addActionItem = async (description: string, assigneeId: string, dueDate: string) => {
+  const addActionItem = async (description: string, assigneeId: string, dueDate: string, descriptionDetail?: string) => {
     if (!currentRetro) return;
     const itemId = `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -2080,7 +2134,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       assignee_id: assigneeId,
       due_date: dueDate,
       status: 'Open',
-      created_in_retro: `Retro on ${currentRetro.date}`
+      created_in_retro: `Retro on ${currentRetro.date}`,
+      description_detail: descriptionDetail || ''
     });
   };
 
@@ -2088,34 +2143,54 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updatePrevActionItemStatus = async (
     itemId: string,
     status: ActionItem['status'],
-    progressComment?: string
+    progressComment?: string,
+    authorName?: string,
+    authorEmoji?: string
   ) => {
     const hasCommentUpdate = typeof progressComment === 'string';
     const trimmedComment = hasCommentUpdate ? progressComment.trim() : undefined;
-    const updatePayload: Record<string, unknown> = { status };
+    const updatePayload: Record<string, any> = { status };
 
-    if (hasCommentUpdate) {
+    let nextUpdates: ActionItemUpdate[] = [];
+
+    if (hasCommentUpdate && trimmedComment) {
+      const { data: itemData } = await supabase
+        .from('action_items')
+        .select('progress_updates')
+        .eq('id', itemId)
+        .maybeSingle();
+
+      let updatesList: ActionItemUpdate[] = [];
+      if (itemData && Array.isArray(itemData.progress_updates)) {
+        updatesList = itemData.progress_updates as ActionItemUpdate[];
+      }
+
+      const newUpdate: ActionItemUpdate = {
+        comment: trimmedComment,
+        timestamp: new Date().toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        authorName: authorName || 'Anonymous',
+        authorEmoji: authorEmoji || '👤'
+      };
+
+      nextUpdates = [...updatesList, newUpdate];
+      updatePayload.progress_updates = nextUpdates;
       updatePayload.progress_comment = trimmedComment;
     }
 
     const { error } = await supabase.from('action_items').update(updatePayload).eq('id', itemId);
 
-    if (hasCommentUpdate && selectedTeamId) {
-      saveLocalActionComment(selectedTeamId, itemId, trimmedComment || '');
+    if (hasCommentUpdate && selectedTeamId && trimmedComment) {
+      saveLocalActionComment(selectedTeamId, itemId, trimmedComment);
     }
 
-    if (error && !hasCommentUpdate) {
-      console.error('[RetroHub] Failed to update action item status.', error);
+    if (error) {
+      console.error('[RetroHub] Failed to update action item status/comment.', error);
       return;
-    }
-
-    if (error && hasCommentUpdate) {
-      const missingCommentColumn = error.message?.toLowerCase().includes('progress_comment');
-      if (!missingCommentColumn) {
-        console.error('[RetroHub] Failed to update action item comment.', error);
-        return;
-      }
-      console.warn('[RetroHub] progress_comment column missing in Supabase. Using local fallback storage.');
     }
 
     // Update local state for immediate feedback
@@ -2124,7 +2199,10 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return {
         ...i,
         status,
-        ...(hasCommentUpdate ? { progressComment: trimmedComment || '' } : {})
+        ...(hasCommentUpdate && trimmedComment ? { 
+          progressComment: trimmedComment, 
+          progressUpdates: nextUpdates 
+        } : {})
       };
     }));
 
@@ -2137,7 +2215,10 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return {
             ...i,
             status,
-            ...(hasCommentUpdate ? { progressComment: trimmedComment || '' } : {})
+            ...(hasCommentUpdate && trimmedComment ? { 
+              progressComment: trimmedComment, 
+              progressUpdates: nextUpdates 
+            } : {})
           };
         })
       };
@@ -2331,6 +2412,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addDakiCard,
       voteDakiCard,
       deleteDakiCard,
+      updateDakiCard,
       addActionItem,
       updatePrevActionItemStatus,
       submitRetroFeedback,
