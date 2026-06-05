@@ -66,28 +66,11 @@ export const ScorePhase: React.FC = () => {
 
   const handleFinish = async () => {
     if (!isFacilitator) return;
-    if (!allFeedbackSubmitted) {
-      setArchiveError('Archive is locked until all team members submit final feedback.');
-      return;
-    }
 
     playSuccess();
     setArchiveError('');
     await setRetroScore(score, facilitatorFeedback);
-    const completionResult = await completeRetro();
-
-    if (!completionResult.ok) {
-      const missingNames = team.members
-        .filter(member => completionResult.missingMemberIds.includes(member.id))
-        .map(member => member.name);
-      setArchiveError(
-        missingNames.length > 0
-          ? `Still waiting for feedback from: ${missingNames.join(', ')}`
-          : 'Archive is locked until all team members submit final feedback.'
-      );
-      return;
-    }
-
+    await completeRetro();
     setCompleted(true);
   };
 
@@ -892,7 +875,6 @@ export const ScorePhase: React.FC = () => {
               <Button
                 variant="success"
                 size="sm"
-                disabled={!allFeedbackSubmitted}
                 onClick={handleFinish}
                 icon={<CheckCircle className="w-4 h-4" />}
                 glow

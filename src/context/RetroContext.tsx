@@ -984,65 +984,91 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               const parsedFeedback = parseRetroFeedback(s.retro_feedback);
               
               setScheduledRetros(prev => prev.filter(r => r.id !== s.id));
-              
-              const { data: cards } = await supabase.from('daki_cards').select('*').eq('session_id', s.id);
-              const { data: actions } = await supabase.from('action_items').select('*').eq('session_id', s.id);
-              const { data: games } = await supabase.from('game_scores').select('*').eq('session_id', s.id);
-              const { data: ice } = await supabase.from('icebreaker_answers').select('*').eq('session_id', s.id);
-              const { data: health } = await supabase.from('health_check_scores').select('*').eq('session_id', s.id);
-              const { data: aiScores } = await supabase.from('ai_adoption_scores').select('*').eq('session_id', s.id);
-              const { data: starVotesInsert } = await supabase.from('star_of_release_votes').select('*').eq('session_id', s.id);
 
-              const gameScores: Record<string, number> = {};
-              games?.forEach(g => { gameScores[g.member_id] = g.score; });
-
-              const icebreakerAnswers: Record<string, string> = {};
-              ice?.forEach(i => { icebreakerAnswers[i.member_id] = i.answer; });
-
-              const healthCheckScores: Record<string, Record<string, number>> = {};
-              health?.forEach(h => {
-                if (!h.member_id) return;
-                if (!healthCheckScores[h.member_id]) {
-                  healthCheckScores[h.member_id] = {};
+              setCurrentRetro(prev => {
+                if (prev && prev.id === s.id) {
+                  // Merge incoming updates to prevent heavy database re-queries and state wipes
+                  return {
+                    ...prev,
+                    phase: s.phase,
+                    status: s.status,
+                    retroName: parsedFeedback.retroName,
+                    jiraLink: parsedFeedback.jiraLink,
+                    retroScore: s.retro_score,
+                    retroFeedback: parsedFeedback.facilitatorFeedback,
+                    memberRetroFeedback: parsedFeedback.memberFeedback,
+                    joinedMemberIds: parsedFeedback.joinedMemberIds,
+                    gameStatus: s.game_status,
+                    gameStartedAt: s.game_started_at,
+                    icebreakerQuestion: s.icebreaker_question,
+                    createdBy: s.created_by
+                  };
                 }
-                healthCheckScores[h.member_id][h.metric_id] = Number(h.score);
-              });
 
-              const aiAdoptionScores: Record<string, Record<string, number>> = {};
-              aiScores?.forEach(a => {
-                if (!a.member_id) return;
-                if (!aiAdoptionScores[a.member_id]) {
-                  aiAdoptionScores[a.member_id] = {};
-                }
-                aiAdoptionScores[a.member_id][a.question_id] = Number(a.score);
-              });
+                // If not active locally yet, perform a one-time async load
+                void (async () => {
+                  const { data: cards } = await supabase.from('daki_cards').select('*').eq('session_id', s.id);
+                  const { data: actions } = await supabase.from('action_items').select('*').eq('session_id', s.id);
+                  const { data: games } = await supabase.from('game_scores').select('*').eq('session_id', s.id);
+                  const { data: ice } = await supabase.from('icebreaker_answers').select('*').eq('session_id', s.id);
+                  const { data: health } = await supabase.from('health_check_scores').select('*').eq('session_id', s.id);
+                  const { data: aiScores } = await supabase.from('ai_adoption_scores').select('*').eq('session_id', s.id);
+                  const { data: starVotesInsert } = await supabase.from('star_of_release_votes').select('*').eq('session_id', s.id);
 
-              const starOfReleaseVotesInsert: Record<string, string> = {};
-              starVotesInsert?.forEach(v => { starOfReleaseVotesInsert[v.voted_by_member_id] = v.nominee_member_id; });
+                  const gameScores: Record<string, number> = {};
+                  games?.forEach(g => { gameScores[g.member_id] = g.score; });
 
-              setCurrentRetro({
-                id: s.id,
-                teamId: s.team_id,
-                date: s.date,
-                phase: s.phase,
-                status: s.status,
-                retroName: parsedFeedback.retroName,
-                jiraLink: parsedFeedback.jiraLink,
-                gameScores,
-                icebreakerAnswers,
-                healthCheckScores,
-                aiAdoptionScores,
-                dakiCards: (cards || []).map(mapCardFromDb),
-                actionItems: (actions || []).map((a) => mapActionItemFromDb(a, loadLocalActionComments(s.team_id))),
-                retroScore: s.retro_score,
-                retroFeedback: parsedFeedback.facilitatorFeedback,
-                memberRetroFeedback: parsedFeedback.memberFeedback,
-                joinedMemberIds: parsedFeedback.joinedMemberIds,
-                gameStatus: s.game_status,
-                gameStartedAt: s.game_started_at,
-                icebreakerQuestion: s.icebreaker_question,
-                createdBy: s.created_by,
-                starOfReleaseVotes: starOfReleaseVotesInsert
+                  const icebreakerAnswers: Record<string, string> = {};
+                  ice?.forEach(i => { icebreakerAnswers[i.member_id] = i.answer; });
+
+                  const healthCheckScores: Record<string, Record<string, number>> = {};
+                  health?.forEach(h => {
+                    if (!h.member_id) return;
+                    if (!healthCheckScores[h.member_id]) {
+                      healthCheckScores[h.member_id] = {};
+                    }
+                    healthCheckScores[h.member_id][h.metric_id] = Number(h.score);
+                  });
+
+                  const aiAdoptionScores: Record<string, Record<string, number>> = {};
+                  aiScores?.forEach(a => {
+                    if (!a.member_id) return;
+                    if (!aiAdoptionScores[a.member_id]) {
+                      aiAdoptionScores[a.member_id] = {};
+                    }
+                    aiAdoptionScores[a.member_id][a.question_id] = Number(a.score);
+                  });
+
+                  const starOfReleaseVotesInsert: Record<string, string> = {};
+                  starVotesInsert?.forEach(v => { starOfReleaseVotesInsert[v.voted_by_member_id] = v.nominee_member_id; });
+
+                  setCurrentRetro({
+                    id: s.id,
+                    teamId: s.team_id,
+                    date: s.date,
+                    phase: s.phase,
+                    status: s.status,
+                    retroName: parsedFeedback.retroName,
+                    jiraLink: parsedFeedback.jiraLink,
+                    gameScores,
+                    icebreakerAnswers,
+                    healthCheckScores,
+                    aiAdoptionScores,
+                    dakiCards: (cards || []).map(mapCardFromDb),
+                    actionItems: (actions || []).map((a) => mapActionItemFromDb(a, loadLocalActionComments(s.team_id))),
+                    retroScore: s.retro_score,
+                    retroFeedback: parsedFeedback.facilitatorFeedback,
+                    memberRetroFeedback: parsedFeedback.memberFeedback,
+                    joinedMemberIds: parsedFeedback.joinedMemberIds,
+                    gameStatus: s.game_status,
+                    gameStartedAt: s.game_started_at,
+                    icebreakerQuestion: s.icebreaker_question,
+                    createdBy: s.created_by,
+                    starOfReleaseVotes: starOfReleaseVotesInsert
+                  });
+                })();
+
+                return prev;
               });
             } else if (s.status === 'scheduled') {
               const parsedFeedback = parseRetroFeedback(s.retro_feedback);
@@ -1844,7 +1870,7 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const joinRetro = () => {
+  const joinRetro = async () => {
     if (currentRetro) {
       if (!isAuthorizedApprovedMember(currentRetro.teamId, currentUserMemberId)) {
         console.warn('[RetroHub] Join blocked: current user is not an approved team member.');
@@ -1856,16 +1882,25 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (!currentUserMemberId) return;
 
-      const nextJoinedMemberIds = Array.from(new Set([...(currentRetro.joinedMemberIds || []), currentUserMemberId]));
+      // Fetch the latest state to prevent clashing updates when multiple members join concurrently
+      const { data: latestSession } = await supabase
+        .from('retro_sessions')
+        .select('retro_feedback')
+        .eq('id', currentRetro.id)
+        .maybeSingle();
+
+      const parsedFeedback = parseRetroFeedback(latestSession?.retro_feedback);
+      const nextJoinedMemberIds = Array.from(new Set([...(parsedFeedback.joinedMemberIds || []), currentUserMemberId]));
+      
       const payload: RetroFeedbackPayload = {
-        facilitatorFeedback: currentRetro.retroFeedback || '',
-        memberFeedback: currentRetro.memberRetroFeedback || {},
+        facilitatorFeedback: parsedFeedback.facilitatorFeedback || '',
+        memberFeedback: parsedFeedback.memberFeedback || {},
         joinedMemberIds: nextJoinedMemberIds,
-        retroName: currentRetro.retroName,
-        jiraLink: currentRetro.jiraLink
+        retroName: parsedFeedback.retroName || currentRetro.retroName,
+        jiraLink: parsedFeedback.jiraLink || currentRetro.jiraLink
       };
 
-      void supabase
+      await supabase
         .from('retro_sessions')
         .update({ retro_feedback: serializeRetroFeedback(payload) })
         .eq('id', currentRetro.id);
@@ -2325,14 +2360,11 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const missingMemberIds = effectiveJoinedMemberIds.filter(memberId => !feedbackMap[memberId]?.trim());
 
-    if (missingMemberIds.length > 0) {
-      return { ok: false, missingMemberIds };
-    }
-
+    // Do not block completion, perform status update to completed regardless
     await supabase.from('retro_sessions').update({ status: 'completed' }).eq('id', currentRetro.id);
     sessionStorage.removeItem('daki_retro_joined');
     setHasJoined(false);
-    return { ok: true, missingMemberIds: [] };
+    return { ok: true, missingMemberIds };
   };
 
   // Cancel and clear current active session

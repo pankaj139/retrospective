@@ -49,9 +49,12 @@ export const StarOfReleasePhase: React.FC = () => {
 
   const liveMembers = useMemo(() => {
     const joinedIds = currentRetro?.joinedMemberIds || [];
-    if (joinedIds.length === 0) return team.members;
-    return team.members.filter(m => joinedIds.includes(m.id));
-  }, [team.members, currentRetro?.joinedMemberIds]);
+    const filtered = team.members.filter(m => joinedIds.includes(m.id));
+    if (filtered.length === 0) {
+      return team.members.filter(m => m.id === currentUserMemberId);
+    }
+    return filtered;
+  }, [team.members, currentRetro?.joinedMemberIds, currentUserMemberId]);
 
   const totalVoters = liveMembers.length;
   const totalVotesCast = useMemo(() => {
