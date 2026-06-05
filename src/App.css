@@ -226,6 +226,42 @@
   background: var(--glass-bg-hover);
 }
 
+/* Modal layout and cards styling (theme-aware) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.modal-card {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg), 0 25px 80px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+.modal-card-large {
+  max-width: 64rem; /* max-w-5xl */
+  max-height: 90vh;
+}
+
+.modal-card-medium {
+  max-width: 28rem; /* max-w-md */
+}
+
 /* Typography styles */
 .title-large {
   font-size: 2.25rem;

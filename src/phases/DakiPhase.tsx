@@ -75,16 +75,11 @@ export const DakiPhase: React.FC = () => {
 
     return (
       <div 
-        className="fixed inset-0 flex items-center justify-center z-50 p-4"
-        style={{ background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+        className="modal-backdrop"
         onClick={() => setEditingCard(null)}
       >
         <div 
-          className="rounded-2xl w-full max-w-md p-6 flex flex-col gap-4 bg-slate-900 border border-white/10"
-          style={{
-            background: 'linear-gradient(145deg, #0f1523 0%, #0a0e1a 100%)',
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 25px 80px rgba(0,0,0,0.8), 0 0 60px rgba(99,102,241,0.08)'
-          }}
+          className="modal-card modal-card-medium p-6 flex flex-col gap-4"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -94,7 +89,7 @@ export const DakiPhase: React.FC = () => {
             </h3>
             <button 
               onClick={() => setEditingCard(null)}
-              className="text-slate-400 hover:text-slate-200 transition-colors"
+              className="text-slate-400 hover:text-slate-100 transition-colors"
             >
               ✕
             </button>
@@ -108,7 +103,7 @@ export const DakiPhase: React.FC = () => {
                 required
                 value={editSummary}
                 onChange={e => setEditSummary(e.target.value)}
-                className="form-input bg-slate-950"
+                className="form-input"
               />
             </div>
 
@@ -119,7 +114,7 @@ export const DakiPhase: React.FC = () => {
                 onChange={e => setEditDescription(e.target.value)}
                 placeholder="Add more details, examples, or impact description..."
                 rows={4}
-                className="form-input bg-slate-950 resize-none py-2"
+                className="form-input resize-none py-2"
               />
             </div>
 
@@ -129,7 +124,7 @@ export const DakiPhase: React.FC = () => {
                 <select
                   value={editColumn}
                   onChange={e => setEditColumn(e.target.value as ColumnType)}
-                  className="form-select bg-slate-950"
+                  className="form-select"
                 >
                   <option value="drop">🛑 DROP</option>
                   <option value="add">➕ ADD</option>
@@ -143,7 +138,7 @@ export const DakiPhase: React.FC = () => {
                 <select
                   value={editCategory}
                   onChange={e => setEditCategory(e.target.value)}
-                  className="form-select bg-slate-950"
+                  className="form-select"
                 >
                   <option value="Code">💻 Code</option>
                   <option value="Testing">🕵️‍♀️ Testing</option>

@@ -363,17 +363,11 @@ export const SetupPhase: React.FC = () => {
 
     const modalContent = (
       <div 
-        className="fixed inset-0 flex items-center justify-center z-50 p-4"
-        style={{ background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+        className="modal-backdrop"
         onClick={() => setSelectedHistoryRetro(null)}
       >
         <div 
-          className="rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-6"
-          style={{
-            background: 'linear-gradient(145deg, #0f1523 0%, #0a0e1a 100%)',
-            border: '1px solid rgba(99, 102, 241, 0.25)',
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 25px 80px rgba(0,0,0,0.8), 0 0 60px rgba(99,102,241,0.08)'
-          }}
+          className="modal-card modal-card-large p-6 flex flex-col gap-6 overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -389,7 +383,7 @@ export const SetupPhase: React.FC = () => {
             </div>
             <button 
               onClick={() => setSelectedHistoryRetro(null)}
-              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-200"
+              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-all duration-200"
             >
               <X className="w-5 h-5" />
             </button>
@@ -402,7 +396,7 @@ export const SetupPhase: React.FC = () => {
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 modalTab === 'overview' 
                   ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
-                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -415,7 +409,7 @@ export const SetupPhase: React.FC = () => {
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 modalTab === 'daki' 
                   ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
-                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -428,7 +422,7 @@ export const SetupPhase: React.FC = () => {
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 modalTab === 'actions' 
                   ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
-                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -471,7 +465,7 @@ export const SetupPhase: React.FC = () => {
                           {memberFeedbackEntries.map(([memberId, text]) => {
                             const member = retroTeam?.members.find(m => m.id === memberId);
                             return (
-                              <div key={memberId} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                              <div key={memberId} className="rounded-lg border border-white/5 bg-white/3 px-3 py-2.5">
                                 <div className="text-[11px] text-indigo-300 font-semibold mb-1">
                                   {member?.emoji || '👤'} {member?.name || 'Team Member'}
                                 </div>
@@ -541,7 +535,7 @@ export const SetupPhase: React.FC = () => {
                               <span className="text-slate-300 font-semibold">{metric.name}</span>
                               <span className="font-mono font-bold text-slate-200">{avg > 0 ? `${avg}/5` : 'N/A'}</span>
                             </div>
-                            <div className="w-full bg-slate-950/80 rounded-full h-2 overflow-hidden border border-white/5">
+                            <div className="w-full bg-slate-950/40 rounded-full h-2 overflow-hidden border border-white/5">
                               <div 
                                 className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor(avg)}`}
                                 style={{ width: `${(avg / 5) * 100}%` }}
@@ -569,7 +563,7 @@ export const SetupPhase: React.FC = () => {
                               <span className="text-slate-300 font-semibold">{question.name}</span>
                               <span className="font-mono font-bold text-slate-200">{avg > 0 ? `${avg}/5` : 'N/A'}</span>
                             </div>
-                            <div className="w-full bg-slate-950/80 rounded-full h-2 overflow-hidden border border-white/5">
+                            <div className="w-full bg-slate-950/40 rounded-full h-2 overflow-hidden border border-white/5">
                               <div 
                                 className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor(avg)}`}
                                 style={{ width: `${(avg / 5) * 100}%` }}
@@ -603,7 +597,7 @@ export const SetupPhase: React.FC = () => {
                       (selectedHistoryRetro.dakiCards || [])
                         .filter(c => c.column === 'drop')
                         .map(card => (
-                          <div key={card.id} className="daki-card-item bg-rose-950/10 border-rose-500/10">
+                          <div key={card.id} className="daki-card-item bg-rose-950/5 border-rose-500/20">
                             <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
                             <div className="flex items-center justify-between mt-1 text-[10px]">
                               <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
@@ -641,7 +635,7 @@ export const SetupPhase: React.FC = () => {
                       (selectedHistoryRetro.dakiCards || [])
                         .filter(c => c.column === 'add')
                         .map(card => (
-                          <div key={card.id} className="daki-card-item bg-emerald-950/10 border-emerald-500/10">
+                          <div key={card.id} className="daki-card-item bg-emerald-950/5 border-emerald-500/20">
                             <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
                             <div className="flex items-center justify-between mt-1 text-[10px]">
                               <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
@@ -679,7 +673,7 @@ export const SetupPhase: React.FC = () => {
                       (selectedHistoryRetro.dakiCards || [])
                         .filter(c => c.column === 'keep')
                         .map(card => (
-                          <div key={card.id} className="daki-card-item bg-amber-950/10 border-amber-500/10">
+                          <div key={card.id} className="daki-card-item bg-amber-950/5 border-amber-500/20">
                             <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
                             <div className="flex items-center justify-between mt-1 text-[10px]">
                               <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
@@ -717,7 +711,7 @@ export const SetupPhase: React.FC = () => {
                       (selectedHistoryRetro.dakiCards || [])
                         .filter(c => c.column === 'improve')
                         .map(card => (
-                          <div key={card.id} className="daki-card-item bg-cyan-950/10 border-cyan-500/10">
+                          <div key={card.id} className="daki-card-item bg-cyan-950/5 border-cyan-500/20">
                             <p className="text-xs text-slate-200 whitespace-pre-wrap">{card.content}</p>
                             <div className="flex items-center justify-between mt-1 text-[10px]">
                               <span className={`px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(card.category || 'General')}`}>
@@ -806,16 +800,11 @@ export const SetupPhase: React.FC = () => {
   const renderScheduleModal = () => {
     const modalContent = (
       <div 
-        className="fixed inset-0 flex items-center justify-center z-50 p-4"
-        style={{ background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+        className="modal-backdrop"
         onClick={() => setShowScheduleModal(false)}
       >
         <div 
-          className="rounded-2xl w-full max-w-md p-6 flex flex-col gap-4 bg-slate-900 border border-white/10"
-          style={{
-            background: 'linear-gradient(145deg, #0f1523 0%, #0a0e1a 100%)',
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 25px 80px rgba(0,0,0,0.8), 0 0 60px rgba(99,102,241,0.08)'
-          }}
+          className="modal-card modal-card-medium p-6 flex flex-col gap-4"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between border-b border-white/10 pb-3">

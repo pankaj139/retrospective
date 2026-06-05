@@ -8,7 +8,7 @@ The application utilizes a sleek, dark-mode glassmorphic user interface and incl
 
 ## Key Features & Retro Workflow
 
-The retrospective is divided into **8 structured phases** synchronized in real-time across all team members:
+The retrospective is divided into **9 structured phases** synchronized in real-time across all team members:
 
 1. **🎮 Warmup Game (Phase 1)**
    - A synchronized balloon-popping mini-game. 
@@ -21,12 +21,12 @@ The retrospective is divided into **8 structured phases** synchronized in real-t
    - Responses are masked (`🔒 Answer hidden until everyone submits`) and automatically revealed in full text once every active team member has saved their answer.
 3. **📋 Previous Commitments (Phase 3)**
    - Review active Action Items carried over from the prior retrospective sprint. 
-   - Resolve or update item statuses (Open, In Progress, Resolved) dynamically.
-4. **📊 Health Check (Phase 5)**
+   - Resolve or update item statuses (Open, In Progress, Resolved) dynamically with details and a complete historical timeline of progress updates.
+4. **📊 Health Check (Phase 4)**
    - Drag-and-drop sliders to rate 5 key parameters: Speed, Quality, Joy, Collaboration, and Process.
    - Results are hidden behind a locked checklist screen until all members submit.
    - Unlocks a custom **SVG Radar Chart (Pentagon)** displaying team-wide performance averages.
-5. **🤖 AI Adoption (Phase 5 - NEW)**
+5. **🤖 AI Adoption (Phase 5)**
    - A dedicated check-in to track the team's transition from basic code completion (e.g. Cursor) to **agentic development workflows**.
    - Rates 3 metrics:
      1. **AI Agent & Skill Integration**: Usage frequency of delegating tasks to AI agents and invoking specialized skills/tools.
@@ -36,21 +36,28 @@ The retrospective is divided into **8 structured phases** synchronized in real-t
 6. **🛑 DAKI Board (Phase 6)**
    - Collaborative board divided into four columns: **Drop** (Stop Doing), **Add** (Start Doing), **Keep** (Good Things), and **Improve** (Better Ways).
    - Tag cards with categories (Code, Testing, Process, Docs, Product, General).
+   - Support for editing card content, description, category, and column post-creation.
    - **Self-Upvote Prevention**: Users are blocked from voting on their own cards. Hovering reveals a disabled state with explanation.
    - **Atomic Upvote Toggling**: Clicking a vote increments the card's like counter and appends the member's ID to the database array; clicking again removes the upvote.
 7. **📈 Prioritize (Phase 7)**
    - Facilitator reviews DAKI board cards sorted by upvote counts.
-   - Instantly convert cards into new Action Items, select assignees from the team list, and set due dates.
-8. **🏆 Score & Summary (Phase 8)**
-   - Score the retrospective session value (1 to 5 stars) and write closing feedback.
-   - Facilitator archives the active session, logging it in the historic records, and returns the team to the lobby setup.
+   - Instantly convert cards into new Action Items, select assignees from the team list, set due dates, and add detailed item descriptions.
+8. **🏆 Star of the Release (Phase 8 - NEW)**
+   - Nominate the team member who shone brightest this release.
+   - Real-time voting progress tracker shows who has voted.
+   - Winner is dynamically calculated and revealed with a celebratory Trophy card and nomination details once all active members have submitted.
+9. **📊 Retro Score & Summary (Phase 9)**
+   - Rate the retrospective session value (1 to 5 stars) and write closing feedback.
+   - Facilitator views the final retrospective session summary, game high-scorer, Star of the Release winner, health and AI metrics averages, DAKI board logs, and committed action items.
+   - Export retro summary data easily: Copy Markdown or JSON to clipboard, Copy Rich Text format, Download file (`.md` or `.json`), or open interactive print preview for printing/saving as PDF.
+   - Facilitator archives the active session, logging it in the historic records, and returns the team to the setup phase.
 
 ---
 
 ## Project Architecture
 
 ### Tech Stack
-* **Frontend**: React 18, TypeScript, Vite.
+* **Frontend**: React 19, TypeScript, Vite.
 * **Database**: PostgreSQL (Supabase).
 * **Multiplayer Sync**: Supabase Realtime Channels (broadcasting `INSERT`, `UPDATE`, and `DELETE` events for sub-tables).
 * **Styling**: Pure CSS (Vanilla) with native custom HSL variables and CSS Grid layouts.
@@ -66,7 +73,7 @@ The retrospective is divided into **8 structured phases** synchronized in real-t
 
 ## Database Schema (Supabase PostgreSQL)
 
-The backend consists of 9 core tables:
+The backend consists of 10 core tables:
 
 ```
                   +-------------------+
@@ -94,18 +101,24 @@ The backend consists of 9 core tables:
 +-----+-----+         +-----+-----+         +-----+-----+
 |health_sc. |         | ai_adopt_s. |         |action_it. |
 +-----------+         +-----------+         +-----------+
+      | (1:N)
+      v
++-----+-----+
+|star_votes |
++-----------+
 ```
 
 ### Table Details
-1. **`teams`**: Stores team names and IDs.
-2. **`team_members`**: Member details (emoji, name, role, team_id).
-3. **`retro_sessions`**: Session status, phase index, start dates, active icebreaker questions, game timestamps, and facilitator ID (`created_by`).
+1. **`teams`**: Stores team names, IDs, owner information.
+2. **`team_members`**: Member details (emoji, name, role, team_id, userId, status for owner/member approval flow).
+3. **`retro_sessions`**: Session status (active, completed, scheduled), phase index, start dates, active icebreaker questions, game timestamps, and facilitator ID (`created_by`).
 4. **`game_scores`**: Pop game records per member.
 5. **`icebreaker_answers`**: Icebreaker text responses submitted per member.
 6. **`health_check_scores`**: Ratings per member per health metric.
 7. **`ai_adoption_scores`**: Ratings per member per agentic adoption question.
-8. **`daki_cards`**: Categorized columns, author details, votes count, and **`voted_by`** text arrays to prevent duplicate upvoting.
-9. **`action_items`**: Commitments, assignees, due dates, and status.
+8. **`daki_cards`**: Categorized columns, author details, votes count, description, and **`voted_by`** text arrays to prevent duplicate upvoting.
+9. **`action_items`**: Commitments, assignees, due dates, status, description detail, and progress updates timeline array.
+10. **`star_of_release_votes`**: Nominations cast by member for Star of the Release nominee per retro session.
 
 ---
 
@@ -127,6 +140,7 @@ ALTER TABLE public.health_check_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_adoption_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daki_cards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.action_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.star_of_release_votes ENABLE ROW LEVEL SECURITY;
 
 -- Add read policies (Example: Allow SELECT access to anyone with API Key)
 CREATE POLICY "Allow public select" ON public.teams FOR SELECT USING (true);
