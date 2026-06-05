@@ -535,17 +535,17 @@ const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUser
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1">
+      <div className="flex flex-col gap-2 border-t border-white/5 pt-2 mt-1">
         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 min-w-0">
           <span className="text-sm shrink-0">{card.authorEmoji}</span>
-          <span className="truncate font-semibold text-slate-300">{card.authorName}</span>
+          <span className="font-semibold text-slate-300 truncate" title={card.authorName}>{card.authorName}</span>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-3 pt-0.5">
           <button
             onClick={() => !isOwnCard && onUpvote(card.id)}
             disabled={isOwnCard}
-            className={`flex items-center gap-1 text-[10px] bg-slate-900 border px-2 py-1 rounded-lg transition-colors
+            className={`flex items-center gap-1 text-[10px] bg-slate-900 border px-2.5 py-1 rounded-lg transition-colors
               ${isOwnCard 
                 ? 'opacity-40 cursor-not-allowed border-white/5 text-slate-500' 
                 : hasVoted 
@@ -555,7 +555,7 @@ const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUser
             `}
             title={isOwnCard ? "You cannot vote on your own feedback" : ""}
           >
-            <ThumbsUp className={`w-3 h-3 ${hasVoted ? 'fill-current' : ''}`} />
+            <ThumbsUp className={`w-3.5 h-3.5 ${hasVoted ? 'fill-current' : ''}`} />
             <span className="font-bold font-mono">{card.votes}</span>
           </button>
           
@@ -565,7 +565,7 @@ const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUser
               className="text-slate-500 hover:text-indigo-400 p-1 transition-colors"
               title="Edit Feedback Card"
             >
-              <Edit className="w-3.5 h-3.5" />
+              <Edit className="w-4 h-4" />
             </button>
           )}
 
@@ -575,7 +575,7 @@ const DakiCardComponent: React.FC<DakiCardComponentProps> = ({ card, currentUser
               className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
               title="Delete Feedback Card"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
