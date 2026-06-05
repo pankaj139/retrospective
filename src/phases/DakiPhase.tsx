@@ -351,7 +351,7 @@ export const DakiPhase: React.FC = () => {
       </div>
 
       {/* Main card adder form */}
-      <Card padding="md" className="max-w-5xl mx-auto w-full">
+      <Card padding="md" className="w-full mx-auto">
         <form onSubmit={handleAddCardSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
           <div className="flex flex-col gap-1.5 md:col-span-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Category Box</label>
