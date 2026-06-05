@@ -70,6 +70,7 @@ const RetroContext = createContext<RetroContextType | undefined>(undefined);
 
 type DbCardRow = {
   id: string;
+  session_id: string;
   column_name: string;
   content: string;
   votes: number;
@@ -1148,17 +1149,21 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .channel(`cards_${sessionId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'daki_cards', filter: `session_id=eq.${sessionId}` },
+        { event: '*', schema: 'public', table: 'daki_cards' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            const newCard = mapCardFromDb(payload.new as DbCardRow);
+            const dbCard = payload.new as DbCardRow;
+            if (dbCard.session_id !== sessionId) return;
+            const newCard = mapCardFromDb(dbCard);
             setCurrentRetro(prev => {
               if (!prev) return null;
               if (prev.dakiCards.some(c => c.id === newCard.id)) return prev;
               return { ...prev, dakiCards: [...prev.dakiCards, newCard] };
             });
           } else if (payload.eventType === 'UPDATE') {
-            const updatedCard = mapCardFromDb(payload.new as DbCardRow);
+            const dbCard = payload.new as DbCardRow;
+            if (dbCard.session_id !== sessionId) return;
+            const updatedCard = mapCardFromDb(dbCard);
             setCurrentRetro(prev => {
               if (!prev) return null;
               return { ...prev, dakiCards: prev.dakiCards.map(c => (c.id === updatedCard.id ? updatedCard : c)) };
@@ -2123,7 +2128,18 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return;
     }
 
-    await supabase.from('daki_cards').delete().eq('id', cardId);
+    const { error } = await supabase.from('daki_cards').delete().eq('id', cardId);
+    if (!error) {
+      setCurrentRetro(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          dakiCards: prev.dakiCards.filter(c => c.id !== cardId)
+        };
+      });
+    } else {
+      console.error('[RetroHub] Failed to delete DAKI card:', error);
+    }
   };
 
   // Update DAKI card
