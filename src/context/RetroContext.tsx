@@ -34,7 +34,7 @@ interface RetroContextType {
   setHealthScore: (memberId: string, metricId: string, score: number) => Promise<void>;
   setAiAdoptionScore: (memberId: string, questionId: string, score: number) => Promise<void>;
   setStarOfReleaseVote: (memberId: string, nomineeId: string) => Promise<void>;
-  addDakiCard: (column: 'drop' | 'add' | 'keep' | 'improve', content: string, authorId: string, category?: string) => Promise<void>;
+  addDakiCard: (column: 'drop' | 'add' | 'keep' | 'improve', content: string, authorId: string, category?: string, isAnonymous?: boolean) => Promise<void>;
   voteDakiCard: (cardId: string, memberId: string) => Promise<void>;
   deleteDakiCard: (cardId: string) => Promise<void>;
   updateDakiCard: (cardId: string, updates: { content: string; description: string; column: DakiCard['column']; category: string }) => Promise<void>;
@@ -2038,7 +2038,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     column: 'drop' | 'add' | 'keep' | 'improve',
     content: string,
     authorId: string,
-    category?: string
+    category?: string,
+    isAnonymous?: boolean
   ) => {
     if (!currentRetro) return;
     const cardId = `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2052,8 +2053,8 @@ export const RetroProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       content,
       votes: 0,
       author_id: authorId,
-      author_name: author?.name || 'Anonymous',
-      author_emoji: author?.emoji || '👤',
+      author_name: isAnonymous ? 'Anonymous' : (author?.name || 'Anonymous'),
+      author_emoji: isAnonymous ? '🕵️' : (author?.emoji || '👤'),
       category: category || 'General',
       is_simulated: false
     });

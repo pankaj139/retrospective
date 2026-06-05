@@ -39,6 +39,7 @@ export const DakiPhase: React.FC = () => {
   const [activeColumn, setActiveColumn] = useState<ColumnType>('add');
   const [cardText, setCardText] = useState('');
   const [cardCategory, setCardCategory] = useState('Process');
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   // Card editor state
   const [editingCard, setEditingCard] = useState<DakiCard | null>(null);
@@ -220,8 +221,9 @@ export const DakiPhase: React.FC = () => {
     if (!cardText.trim()) return;
 
     playPop(350);
-    addDakiCard(activeColumn, cardText, activeMember?.id || 'unknown', cardCategory);
+    addDakiCard(activeColumn, cardText, activeMember?.id || 'unknown', cardCategory, isAnonymous);
     setCardText('');
+    setIsAnonymous(false);
   };
 
   const handleUpvote = (cId: string) => {
@@ -350,18 +352,18 @@ export const DakiPhase: React.FC = () => {
 
       {/* Main card adder form */}
       <Card padding="md" className="max-w-5xl mx-auto w-full">
-        <form onSubmit={handleAddCardSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div className="flex flex-col gap-1.5">
+        <form onSubmit={handleAddCardSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+          <div className="flex flex-col gap-1.5 md:col-span-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Category Box</label>
             <select
               value={activeColumn}
               onChange={e => { playClick(); setActiveColumn(e.target.value as ColumnType); }}
               className="form-select font-semibold"
             >
-              <option value="drop">🛑 DROP (Stop Doing)</option>
-              <option value="add">➕ ADD (Start Doing)</option>
-              <option value="keep">⭐ KEEP (Good Things)</option>
-              <option value="improve">⚙️ IMPROVE (Better Ways)</option>
+              <option value="drop">🛑 DROP (Stop)</option>
+              <option value="add">➕ ADD (Start)</option>
+              <option value="keep">⭐ KEEP (Good)</option>
+              <option value="improve">⚙️ IMPROVE (Better)</option>
             </select>
           </div>
 
@@ -385,29 +387,38 @@ export const DakiPhase: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1.5 justify-center">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Posting As</span>
-              <span className="text-xs font-semibold py-2.5 px-3 bg-white/5 border border-white/5 rounded-xl block truncate">
-                {activeMember?.emoji} {activeMember?.name}
-              </span>
-            </div>
+          <div className="flex flex-col gap-1.5 md:col-span-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Tag / Category</label>
+            <select
+              value={cardCategory}
+              onChange={e => setCardCategory(e.target.value)}
+              className="form-select text-xs font-semibold py-2.5"
+            >
+              <option value="Code">💻 Code</option>
+              <option value="Testing">🕵️‍♀️ Testing</option>
+              <option value="Process">⚙️ Process</option>
+              <option value="Documentation">📚 Docs</option>
+              <option value="Product">💼 Product</option>
+              <option value="General">🏷️ General</option>
+            </select>
+          </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Tag</label>
-              <select
-                value={cardCategory}
-                onChange={e => setCardCategory(e.target.value)}
-                className="form-select text-xs py-2"
-              >
-                <option value="Code">💻 Code</option>
-                <option value="Testing">🕵️‍♀️ Testing</option>
-                <option value="Process">⚙️ Process</option>
-                <option value="Documentation">📚 Docs</option>
-                <option value="Product">💼 Product</option>
-                <option value="General">🏷️ General</option>
-              </select>
+          <div className="flex flex-col gap-1.5 justify-center md:col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Posting As</span>
+              <label className="flex items-center gap-1 cursor-pointer select-none text-[9px] font-bold text-slate-400 uppercase tracking-wide">
+                <input
+                  type="checkbox"
+                  checked={isAnonymous}
+                  onChange={e => { playClick(); setIsAnonymous(e.target.checked); }}
+                  className="cursor-pointer w-3 h-3"
+                />
+                Anon
+              </label>
             </div>
+            <span className="text-xs font-semibold py-2.5 px-3 bg-white/5 border border-white/5 rounded-xl block truncate" title={isAnonymous ? 'Anonymous' : activeMember?.name}>
+              {isAnonymous ? '🕵️ Anonymous' : `${activeMember?.emoji || '👤'} ${activeMember?.name || 'Unknown'}`}
+            </span>
           </div>
         </form>
       </Card>
