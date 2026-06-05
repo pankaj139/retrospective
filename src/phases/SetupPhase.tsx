@@ -367,11 +367,11 @@ export const SetupPhase: React.FC = () => {
         onClick={() => setSelectedHistoryRetro(null)}
       >
         <div 
-          className="modal-card modal-card-large p-6 flex flex-col gap-6 overflow-y-auto"
+          className="modal-card modal-card-large p-6 flex flex-col gap-6"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 p-4">
+          <div className="flex items-center justify-between border-b border-white/10 p-4 shrink-0">
             <div className="flex flex-col gap-1">
               <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
                 <History className="w-5 h-5 text-indigo-400" />
@@ -390,12 +390,12 @@ export const SetupPhase: React.FC = () => {
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-white/5 pb-2 gap-2 overflow-x-auto">
+          <div className="flex border-b border-white/5 pb-2 gap-2 overflow-x-auto shrink-0">
             <button
               onClick={() => { playClick(); setModalTab('overview'); }}
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 modalTab === 'overview' 
-                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
+                  ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
                   : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
               }`}
             >
@@ -408,7 +408,7 @@ export const SetupPhase: React.FC = () => {
               onClick={() => { playClick(); setModalTab('daki'); }}
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 modalTab === 'daki' 
-                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
+                  ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
                   : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
               }`}
             >
@@ -421,7 +421,7 @@ export const SetupPhase: React.FC = () => {
               onClick={() => { playClick(); setModalTab('actions'); }}
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 modalTab === 'actions' 
-                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
+                  ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
                   : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
               }`}
             >
@@ -433,7 +433,7 @@ export const SetupPhase: React.FC = () => {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
             {modalTab === 'overview' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Left Column: Summary */}
